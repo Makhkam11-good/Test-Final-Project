@@ -1,10 +1,11 @@
 package com.gladiator.managers;
 
-import com.badlogic.gdx.Game;
-import com.badlogic.gdx.Screen;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Stack;
+
+import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Screen;
 
 /**
  * GameStateManager (State паттерн) - управляет переходами между экранами/состояниями игры.

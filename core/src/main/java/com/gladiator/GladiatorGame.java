@@ -3,10 +3,10 @@ package com.gladiator;
 import com.badlogic.gdx.Game;
 import com.gladiator.managers.AssetManager;
 import com.gladiator.managers.GameStateManager;
-import com.gladiator.screens.MenuScreen;
-import com.gladiator.screens.GameScreen;
-import com.gladiator.screens.UpgradeScreen;
 import com.gladiator.screens.GameOverScreen;
+import com.gladiator.screens.GameScreen;
+import com.gladiator.screens.MenuScreen;
+import com.gladiator.screens.UpgradeScreen;
 import com.gladiator.screens.VictoryScreen;
 
 /**
