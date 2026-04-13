@@ -2,11 +2,18 @@ package com.gladiator.screens;
 
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.managers.GameStateManager;
 
 /**
  * UpgradeScreen - экран выбора апгрейда после каждой волны (показывает 3 карточки).
  */
 public class UpgradeScreen implements Screen {
+    
+    private GameStateManager gsm;
+
+    public UpgradeScreen(GameStateManager gsm) {
+        this.gsm = gsm;
+    }
 
     @Override
     public void show() {
@@ -14,7 +21,8 @@ public class UpgradeScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        ScreenUtils.clear(0.15f, 0.15f, 0.2f, 1);
+        // Очищаем экран тёмно-жёлтым цветом
+        ScreenUtils.clear(0.4f, 0.3f, 0.1f, 1);
     }
 
     @Override

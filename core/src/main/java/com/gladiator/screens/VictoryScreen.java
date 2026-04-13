@@ -2,11 +2,18 @@ package com.gladiator.screens;
 
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.managers.GameStateManager;
 
 /**
  * VictoryScreen - экран победы (появляется после победы над Боссом на волне 10).
  */
 public class VictoryScreen implements Screen {
+    
+    private GameStateManager gsm;
+
+    public VictoryScreen(GameStateManager gsm) {
+        this.gsm = gsm;
+    }
 
     @Override
     public void show() {
@@ -14,7 +21,8 @@ public class VictoryScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        ScreenUtils.clear(0.8f, 0.7f, 0.2f, 1);
+        // Очищаем экран золотым цветом
+        ScreenUtils.clear(1.0f, 0.84f, 0.0f, 1);
     }
 
     @Override

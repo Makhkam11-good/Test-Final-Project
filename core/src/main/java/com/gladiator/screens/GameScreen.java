@@ -1,12 +1,21 @@
 package com.gladiator.screens;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.managers.GameStateManager;
 
 /**
  * GameScreen - основной экран игры, где происходит вся игровая логика.
  */
 public class GameScreen implements Screen {
+    
+    private GameStateManager gsm;
+
+    public GameScreen(GameStateManager gsm) {
+        this.gsm = gsm;
+    }
 
     @Override
     public void show() {
@@ -14,7 +23,13 @@ public class GameScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        ScreenUtils.clear(0.2f, 0.3f, 0.2f, 1);
+        // Очищаем экран тёмно-зелёным цветом (арена)
+        ScreenUtils.clear(0.1f, 0.3f, 0.1f, 1);
+        
+        // Обработка клавиш
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            gsm.set(GameStateManager.State.GAME_OVER);
+        }
     }
 
     @Override

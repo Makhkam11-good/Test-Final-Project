@@ -1,7 +1,14 @@
 package com.gladiator.managers;
 
+import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Screen;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Stack;
+
 /**
  * GameStateManager (State паттерн) - управляет переходами между экранами/состояниями игры.
+ * Хранит стек состояний и переключает экраны через game.setScreen().
  */
 public class GameStateManager {
 
@@ -9,15 +16,64 @@ public class GameStateManager {
         MENU, GAME, UPGRADE, GAME_OVER, VICTORY
     }
 
+    private Game game;
+    private Stack<State> stateStack = new Stack<>();
+    private Map<State, Screen> screens = new HashMap<>();
+
+    public GameStateManager(Game game) {
+        this.game = game;
+    }
+
+    /**
+     * Регистрирует отображение для состояния.
+     */
+    public void registerScreen(State state, Screen screen) {
+        screens.put(state, screen);
+    }
+
+    /**
+     * Добавляет состояние в стек и переключает экран.
+     */
     public void push(State state) {
-        // TODO: Реализовать в Фазе 2
+        stateStack.push(state);
+        switchScreen(state);
     }
 
+    /**
+     * Удаляет текущее состояние из стека и переключается на предыдущее.
+     */
     public void pop() {
-        // TODO: Реализовать в Фазе 2
+        if (!stateStack.isEmpty()) {
+            stateStack.pop();
+        }
+        if (!stateStack.isEmpty()) {
+            switchScreen(stateStack.peek());
+        }
     }
 
+    /**
+     * Заменяет текущее состояние на новое (очищает стек и добавляет новое).
+     */
     public void set(State state) {
-        // TODO: Реализовать в Фазе 2
+        stateStack.clear();
+        stateStack.push(state);
+        switchScreen(state);
+    }
+
+    /**
+     * Переключает экран к заданному состоянию.
+     */
+    private void switchScreen(State state) {
+        Screen screen = screens.get(state);
+        if (screen != null) {
+            game.setScreen(screen);
+        }
+    }
+
+    /**
+     * Получить текущее состояние.
+     */
+    public State getCurrentState() {
+        return stateStack.isEmpty() ? null : stateStack.peek();
     }
 }

@@ -1,12 +1,31 @@
 package com.gladiator.screens;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.managers.GameStateManager;
 
 /**
  * GameOverScreen - экран поражения (показывает счёт и достигнутую волну).
  */
 public class GameOverScreen implements Screen {
+    
+    private GameStateManager gsm;
+    private SpriteBatch batch;
+    private BitmapFont font;
+    private OrthographicCamera camera;
+
+    public GameOverScreen(GameStateManager gsm) {
+        this.gsm = gsm;
+        this.batch = new SpriteBatch();
+        this.font = new BitmapFont();
+        this.camera = new OrthographicCamera();
+        camera.setToOrtho(false, 800, 480);
+    }
 
     @Override
     public void show() {
@@ -14,7 +33,28 @@ public class GameOverScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        // Очищаем экран тёмно-красным цветом
         ScreenUtils.clear(0.5f, 0.1f, 0.1f, 1);
+        
+        // Обновляем камеру
+        camera.update();
+        batch.setProjectionMatrix(camera.combined);
+        
+        batch.begin();
+        
+        // Рисуем текст Game Over
+        font.getData().setScale(3.0f);
+        font.draw(batch, "GAME OVER", 250, 350);
+        
+        font.getData().setScale(1.5f);
+        font.draw(batch, "Press [R] to return to Menu", 200, 150);
+        
+        batch.end();
+        
+        // Обработка клавиши R для возврата в меню
+        if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+            gsm.set(GameStateManager.State.MENU);
+        }
     }
 
     @Override
@@ -35,5 +75,7 @@ public class GameOverScreen implements Screen {
 
     @Override
     public void dispose() {
+        batch.dispose();
+        font.dispose();
     }
 }
