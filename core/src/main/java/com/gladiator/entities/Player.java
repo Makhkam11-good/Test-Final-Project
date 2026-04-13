@@ -2,12 +2,17 @@ package com.gladiator.entities;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
-import com.gladiator.entities.states.*;
+import com.gladiator.entities.states.AttackState;
+import com.gladiator.entities.states.DeadState;
+import com.gladiator.entities.states.IdleState;
+import com.gladiator.entities.states.PlayerState;
+import com.gladiator.events.EventBus;
+import com.gladiator.events.GameEvent;
 
 /**
  * Player (Рыцарь) - главный персонаж, управляется игроком через WASD.
@@ -142,9 +147,20 @@ public class Player {
      */
     public void takeDamage(float amount) {
         hp -= amount;
+        
+        // Публикуем событие урона
+        EventBus.getInstance().post(
+            new GameEvent(GameEvent.Type.PLAYER_HURT, amount)
+        );
+        
         if (hp <= 0) {
             hp = 0;
             alive = false;
+            
+            // Публикуем событие смерти
+            EventBus.getInstance().post(
+                new GameEvent(GameEvent.Type.PLAYER_DIED)
+            );
         }
     }
 

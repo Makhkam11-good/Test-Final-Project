@@ -41,11 +41,13 @@ public class EventBus {
 
     /**
      * Опубликовать событие всем подписчикам.
+     * Итерирует по КОПИИ списка для избежания ConcurrentModificationException.
      */
     public void post(GameEvent event) {
-        List<EventListener> list = listeners.get(event.type);
+        List<EventListener> list = listeners.get(event.getType());
         if (list != null) {
-            for (EventListener listener : list) {
+            // Итерируем по копии списка
+            for (EventListener listener : new ArrayList<>(list)) {
                 listener.onEvent(event);
             }
         }
