@@ -1,25 +1,132 @@
 package com.gladiator.entities;
 
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Rectangle;
+import com.gladiator.events.EventBus;
+import com.gladiator.events.GameEvent;
+
 /**
- * Enemy (враг) - базовый класс для Слизи, Гоблина и других врагов.
+ * Enemy - базовый класс врага (Слизь, Гоблин).
+ * Враги движутся к игроку и наносят урон при контакте.
+ * Фаза 5: реализация с движением и коллизией.
  */
 public class Enemy {
+    // Размеры
+    public static final float WIDTH = 40f;
+    public static final float HEIGHT = 40f;
+    
+    // Позиция и движение
     public float x, y;
-    public int hp, maxHp;
-    public float speed, damage;
-
+    public float speed;
+    
+    // Здоровье
+    public float hp, maxHp;
+    public float damage;  // урон в секунду
+    
+    // Состояние и награда
+    public boolean alive;
+    public int scoreReward;
+    
+    // Хитбокс
+    public Rectangle bounds;
+    
+    // Ресурс для рисования красного пикселя
+    private static com.badlogic.gdx.graphics.Texture redPixel;
+    
     public Enemy() {
+        this.bounds = new Rectangle(x, y, WIDTH, HEIGHT);
+        this.alive = true;
+        
+        // Создаём красный пиксель для рисования, если его нет
+        if (redPixel == null) {
+            createRedPixel();
+        }
     }
-
-    public void update(float delta) {
-        // TODO: Реализовать в Фазе 5
+    
+    private static void createRedPixel() {
+        com.badlogic.gdx.graphics.Pixmap pixmap = 
+            new com.badlogic.gdx.graphics.Pixmap(1, 1, 
+                com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
+        pixmap.setColor(1, 0, 0, 1);  // Красный
+        pixmap.fill();
+        redPixel = new com.badlogic.gdx.graphics.Texture(pixmap);
+        pixmap.dispose();
     }
-
-    public void render(Object batch) {
-        // TODO: Реализовать в Фазе 5
+    
+    /**
+     * Обновляет позицию врага, направляя его к игроку.
+     */
+    public void update(float delta, float playerX, float playerY) {
+        if (!alive) {
+            return;
+        }
+        
+        // Вычисляем вектор к игроку
+        float dx = playerX - x;
+        float dy = playerY - y;
+        
+        // Нормализуем вектор
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+            dx /= len;
+            dy /= len;
+        }
+        
+        // Перемещаем врага
+        x += dx * speed * delta;
+        y += dy * speed * delta;
+        
+        // Обновляем bounds
+        bounds.set(x, y, WIDTH, HEIGHT);
     }
-
-    public void takeDamage(int dmg) {
-        hp -= dmg;
+    
+    /**
+     * Рисует врага (красный квадрат).
+     */
+    public void render(SpriteBatch batch) {
+        if (!alive) {
+            return;
+        }
+        
+        if (redPixel != null) {
+            batch.setColor(Color.RED);
+            batch.draw(redPixel, x, y, WIDTH, HEIGHT);
+            batch.setColor(Color.WHITE);
+        }
+    }
+    
+    /**
+     * Получает урон.
+     */
+    public void takeDamage(float amount) {
+        hp -= amount;
+        
+        if (hp <= 0 && alive) {
+            alive = false;
+            System.out.println("Enemy died! Score: " + scoreReward);
+            
+            // Публикуем событие смерти врага
+            EventBus.getInstance().post(
+                new GameEvent(GameEvent.Type.ENEMY_DIED, this)
+            );
+        }
+    }
+    
+    /**
+     * Проверяет жив ли враг.
+     */
+    public boolean isAlive() {
+        return alive;
+    }
+    
+    /**
+     * Очищает ресурсы.
+     */
+    public static void dispose() {
+        if (redPixel != null) {
+            redPixel.dispose();
+            redPixel = null;
+        }
     }
 }
