@@ -1,5 +1,9 @@
 package com.gladiator.screens;
 
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
@@ -15,12 +19,9 @@ import com.gladiator.events.GameEvent;
 import com.gladiator.factories.EnemyFactory;
 import com.gladiator.factories.GoblinFactory;
 import com.gladiator.factories.SlimeFactory;
+import com.gladiator.managers.GameManager;
 import com.gladiator.managers.GameStateManager;
 import com.gladiator.managers.LevelManager;
-
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 
 /**
  * GameScreen - основной экран игры, где происходит вся игровая логика.
@@ -36,8 +37,8 @@ public class GameScreen implements Screen {
     
     // Враги
     private List<Enemy> enemies;
-    private int currentWave;
-    private int score;
+    private float spawnInterval;  // Фаза 6: интервал спавна из GameManager
+    private float spawnTimer;
     
     public GameScreen(GameStateManager gsm) {
         this.gsm = gsm;
@@ -55,13 +56,15 @@ public class GameScreen implements Screen {
         // Создаём LevelManager
         levelManager = new LevelManager();
         
-        // Инициализируем враги
+        // Инициализируем враги (Фаза 6: используем GameManager)
         enemies = new ArrayList<>();
-        currentWave = 1;
-        score = 0;
+        
+        // Получаем интервал спавна из стратегии сложности (Фаза 6)
+        spawnInterval = GameManager.getInstance().getDifficulty().getSpawnInterval();
+        spawnTimer = spawnInterval;
         
         // Спавним первую волну
-        spawnWave(currentWave);
+        spawnWave(GameManager.getInstance().getCurrentWave());
         
         // Подписываемся на событие завершения волны
         EventBus.getInstance().subscribe(
@@ -77,14 +80,14 @@ public class GameScreen implements Screen {
     }
 
     /**
-     * Спавнит волну врагов.
+     * Спавнит волну врагов. Фаза 6: добавлены волны 6-9.
      */
     private void spawnWave(int wave) {
         enemies.clear();
         
         List<EnemyFactory> waveFactories = new ArrayList<>();
         
-        // Определяем состав врагов для каждой волны
+        // Определяем состав врагов для каждой волны (GDD раздел 4)
         switch (wave) {
             case 1:
                 // 4 Слизи
@@ -119,6 +122,36 @@ public class GameScreen implements Screen {
             case 5:
                 // 8 Гоблинов
                 for (int i = 0; i < 8; i++) {
+                    waveFactories.add(new GoblinFactory());
+                }
+                break;
+            case 6:
+                // 6 Гоблинов + 4 Слизи (Фаза 6)
+                for (int i = 0; i < 6; i++) {
+                    waveFactories.add(new GoblinFactory());
+                }
+                for (int i = 0; i < 4; i++) {
+                    waveFactories.add(new SlimeFactory());
+                }
+                break;
+            case 7:
+                // 10 Гоблинов (Фаза 6)
+                for (int i = 0; i < 10; i++) {
+                    waveFactories.add(new GoblinFactory());
+                }
+                break;
+            case 8:
+                // 8 Гоблинов + 5 Слизей (Фаза 6)
+                for (int i = 0; i < 8; i++) {
+                    waveFactories.add(new GoblinFactory());
+                }
+                for (int i = 0; i < 5; i++) {
+                    waveFactories.add(new SlimeFactory());
+                }
+                break;
+            case 9:
+                // 12 Гоблинов (Фаза 6)
+                for (int i = 0; i < 12; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
                 break;
@@ -167,11 +200,13 @@ public class GameScreen implements Screen {
     }
 
     /**
-     * Вызывается когда волна завершена.
+     * Вызывается когда волна завершена. Фаза 6: обновляет волну в GameManager.
      */
     private void onWaveCleared() {
         System.out.println("Wave cleared! Showing upgrade screen...");
-        if (currentWave < 10) {
+        int nextWave = GameManager.getInstance().getCurrentWave() + 1;
+        GameManager.getInstance().setCurrentWave(nextWave);
+        if (nextWave <= 10) {
             gsm.push(GameStateManager.State.UPGRADE);
         } else {
             System.out.println("BOSS WAVE!");
@@ -215,9 +250,10 @@ public class GameScreen implements Screen {
                 }
             }
             
-            // Удалить мёртвых врагов
+            // Удалить мёртвых врагов (Фаза 6: публикуем событие и добавляем счёт)
             if (!e.isAlive()) {
-                score += e.scoreReward;
+                GameManager.getInstance().addScore(e.scoreReward);
+                EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED));
                 it.remove();
             }
         }
@@ -236,12 +272,12 @@ public class GameScreen implements Screen {
         player.render(batch);
         batch.end();
         
-        // Рисуем HUD
+        // Рисуем HUD (Фаза 6: используем GameManager и показываем сложность)
         batch.begin();
         String hudText = "HP: " + (int)player.hp + "/" + (int)player.maxHp + 
-                         "  |  Wave: " + currentWave + 
-                         "  |  Score: " + score +
-                         "  |  Enemies: " + enemies.size();
+                         "  |  Wave: " + GameManager.getInstance().getCurrentWave() + "/10" +
+                         "  |  Score: " + GameManager.getInstance().getScore() +
+                         "  |  [" + GameManager.getInstance().getDifficulty().getName() + "]";
         font.draw(batch, hudText, 10, 470);
         batch.end();
         

@@ -7,6 +7,7 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.managers.GameManager;
 import com.gladiator.managers.GameStateManager;
 
 /**
@@ -46,13 +47,24 @@ public class GameOverScreen implements Screen {
         font.getData().setScale(3.0f);
         font.draw(batch, "GAME OVER", 250, 350);
         
+        // Фаза 6: показываем счёт, волну и сложность
         font.getData().setScale(1.5f);
-        font.draw(batch, "Press [R] to return to Menu", 200, 150);
+        font.draw(batch, "Score: " + GameManager.getInstance().getScore(), 200, 280);
+        font.draw(batch, "Wave reached: " + GameManager.getInstance().getCurrentWave(), 200, 230);
+        font.draw(batch, "Difficulty: " + GameManager.getInstance().getDifficulty().getName(), 200, 180);
+        
+        font.getData().setScale(1.2f);
+        font.draw(batch, "[R] Play Again  [ESC] Menu", 200, 100);
         
         batch.end();
         
-        // Обработка клавиши R для возврата в меню
+        // Обработка клавиш (Фаза 6: сбрасываем GameManager при возврате в меню)
         if (Gdx.input.isKeyJustPressed(Input.Keys.R)) {
+            GameManager.getInstance().reset();
+            gsm.set(GameStateManager.State.MENU);
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            GameManager.getInstance().reset();
             gsm.set(GameStateManager.State.MENU);
         }
     }

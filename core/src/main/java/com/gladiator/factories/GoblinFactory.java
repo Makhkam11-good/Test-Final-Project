@@ -2,10 +2,12 @@ package com.gladiator.factories;
 
 import com.badlogic.gdx.math.Rectangle;
 import com.gladiator.entities.Enemy;
+import com.gladiator.managers.GameManager;
 
 /**
  * GoblinFactory - фабрика для создания Гоблинов.
  * Гоблин: HP=40, damage=12, speed=100, reward=25.
+ * Фаза 6: применяет множители сложности из GameManager.
  */
 public class GoblinFactory extends EnemyFactory {
 
@@ -21,6 +23,15 @@ public class GoblinFactory extends EnemyFactory {
         enemy.scoreReward = 25;
         enemy.alive = true;
         enemy.bounds = new Rectangle(x, y, Enemy.WIDTH, Enemy.HEIGHT);
+        
+        // Применяем множители сложности (Фаза 6)
+        float speedMult = GameManager.getInstance().getDifficulty().getEnemySpeedMult();
+        float damageMult = GameManager.getInstance().getDifficulty().getEnemyDamageMult();
+        enemy.speed *= speedMult;
+        enemy.damage *= damageMult;
+        
+        System.out.println("Created Goblin: speed=" + enemy.speed + " damage=" + enemy.damage);
+        
         return enemy;
     }
 }

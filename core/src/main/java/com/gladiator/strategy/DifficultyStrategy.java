@@ -8,4 +8,5 @@ public interface DifficultyStrategy {
     float getEnemyDamageMult();
     int getBossHp();
     float getSpawnInterval();
+    String getName();
 }

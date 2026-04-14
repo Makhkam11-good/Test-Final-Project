@@ -24,4 +24,9 @@ public class MediumDifficulty implements DifficultyStrategy {
     public float getSpawnInterval() {
         return 1.5f;
     }
+
+    @Override
+    public String getName() {
+        return "MEDIUM";
+    }
 }

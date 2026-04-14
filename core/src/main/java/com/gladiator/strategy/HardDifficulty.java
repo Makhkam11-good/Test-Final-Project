@@ -24,4 +24,9 @@ public class HardDifficulty implements DifficultyStrategy {
     public float getSpawnInterval() {
         return 1.0f;
     }
+
+    @Override
+    public String getName() {
+        return "HARD";
+    }
 }
