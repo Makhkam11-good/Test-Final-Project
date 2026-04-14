@@ -13,4 +13,9 @@ public class SpeedBootsDecorator extends PlayerDecorator {
     public float getSpeed() {
         return wrapped.getSpeed() * 1.25f;
     }
+
+    @Override
+    public String getDescription() {
+        return "Speed Boots: +25% speed";
+    }
 }

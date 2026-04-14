@@ -13,4 +13,9 @@ public class AttackSpeedDecorator extends PlayerDecorator {
     public float getAttackCooldown() {
         return wrapped.getAttackCooldown() * 0.8f;
     }
+
+    @Override
+    public String getDescription() {
+        return "Attack Speed: -20% cooldown";
+    }
 }

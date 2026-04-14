@@ -13,4 +13,9 @@ public class FireWeaponDecorator extends PlayerDecorator {
     public int getDamage() {
         return wrapped.getDamage() + 15;
     }
+
+    @Override
+    public String getDescription() {
+        return "Fire Weapon: +15 damage";
+    }
 }

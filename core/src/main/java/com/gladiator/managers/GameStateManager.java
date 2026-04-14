@@ -6,6 +6,7 @@ import java.util.Stack;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Screen;
+import com.gladiator.entities.Player;
 
 /**
  * GameStateManager (State паттерн) - управляет переходами между экранами/состояниями игры.
@@ -20,6 +21,7 @@ public class GameStateManager {
     private Game game;
     private Stack<State> stateStack = new Stack<>();
     private Map<State, Screen> screens = new HashMap<>();
+    private Player currentPlayer;  // Фаза 7: ссылка на текущего игрока для UpgradeScreen
 
     public GameStateManager(Game game) {
         this.game = game;
@@ -76,5 +78,19 @@ public class GameStateManager {
      */
     public State getCurrentState() {
         return stateStack.isEmpty() ? null : stateStack.peek();
+    }
+
+    /**
+     * Установить текущего игрока. Используется GameScreen для UpgradeScreen (Фаза 7).
+     */
+    public void setCurrentPlayer(Player player) {
+        this.currentPlayer = player;
+    }
+
+    /**
+     * Получить текущего игрока. Используется UpgradeScreen (Фаза 7).
+     */
+    public Player getCurrentPlayer() {
+        return currentPlayer;
     }
 }

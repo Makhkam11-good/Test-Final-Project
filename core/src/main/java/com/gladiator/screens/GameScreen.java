@@ -53,6 +53,9 @@ public class GameScreen implements Screen {
         // Создаём Player в центре экрана
         player = new Player();
         
+        // Передаём текущего игрока в GameStateManager для UpgradeScreen (Фаза 7)
+        gsm.setCurrentPlayer(player);
+        
         // Создаём LevelManager
         levelManager = new LevelManager();
         
@@ -200,13 +203,16 @@ public class GameScreen implements Screen {
     }
 
     /**
-     * Вызывается когда волна завершена. Фаза 6: обновляет волну в GameManager.
+     * Вызывается когда волна завершена. Фаза 6: обновляет волну в GameManager. Фаза 7: создаёт UpgradeScreen с текущим игроком.
      */
     private void onWaveCleared() {
         System.out.println("Wave cleared! Showing upgrade screen...");
         int nextWave = GameManager.getInstance().getCurrentWave() + 1;
         GameManager.getInstance().setCurrentWave(nextWave);
         if (nextWave <= 10) {
+            // Фаза 7: создаём новый UpgradeScreen с текущим игроком
+            UpgradeScreen upgradeScreen = new UpgradeScreen(gsm, player);
+            gsm.registerScreen(GameStateManager.State.UPGRADE, upgradeScreen);
             gsm.push(GameStateManager.State.UPGRADE);
         } else {
             System.out.println("BOSS WAVE!");
@@ -245,7 +251,7 @@ public class GameScreen implements Screen {
                 );
                 
                 if (dist <= 80f && e.isAlive()) {  // ATTACK_RADIUS = 80
-                    e.takeDamage(10);  // BASE_DAMAGE = 10
+                    e.takeDamage(player.getStats().getDamage());  // Фаза 7: используем stats.getDamage()
                     System.out.println("Hit enemy! Enemy HP: " + e.hp);
                 }
             }
@@ -272,13 +278,22 @@ public class GameScreen implements Screen {
         player.render(batch);
         batch.end();
         
-        // Рисуем HUD (Фаза 6: используем GameManager и показываем сложность)
+        // Рисуем HUD (Фаза 7: обновлены характеристики из stats)
         batch.begin();
-        String hudText = "HP: " + (int)player.hp + "/" + (int)player.maxHp + 
+        int maxHp = player.getStats().getMaxHp();
+        int damage = player.getStats().getDamage();
+        float speed = player.getStats().getSpeed();
+        float cooldown = player.getStats().getAttackCooldown();
+        
+        String hudText = "HP: " + (int)player.hp + "/" + maxHp + 
                          "  |  Wave: " + GameManager.getInstance().getCurrentWave() + "/10" +
                          "  |  Score: " + GameManager.getInstance().getScore() +
                          "  |  [" + GameManager.getInstance().getDifficulty().getName() + "]";
         font.draw(batch, hudText, 10, 470);
+        
+        // Вторая строка HUD с дополнительными характеристиками (Фаза 7)
+        String statsText = "DMG: " + damage + "  |  SPD: " + (int)speed + "  |  CD: " + String.format("%.2f", cooldown);
+        font.draw(batch, statsText, 10, 450);
         batch.end();
         
         // Обработка клавиш

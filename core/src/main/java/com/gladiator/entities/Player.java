@@ -7,6 +7,9 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.gladiator.decorator.BasePlayer;
+import com.gladiator.decorator.PlayerDecorator;
+import com.gladiator.decorator.PlayerStats;
 import com.gladiator.entities.states.AttackState;
 import com.gladiator.entities.states.DeadState;
 import com.gladiator.entities.states.IdleState;
@@ -32,14 +35,16 @@ public class Player {
     public float velocityX, velocityY;
     
     // Поля - здоровье и атака
-    public float hp, maxHp;
+    public float hp;
     public float attackTimer;
     public boolean alive;
-    public int damage;
     
     // Поля - состояние и коллизии
     public Rectangle bounds;
     private PlayerState currentState;
+    
+    // Поле - характеристики Рыцаря (Decorator паттерн)
+    private PlayerStats stats;
     
     // Ресурс для рисования белого пикселя
     private static Texture whitePixel;
@@ -49,11 +54,10 @@ public class Player {
         this.y = 240 - HEIGHT / 2;     // центр по Y (480/2 - 32)
         this.velocityX = 0;
         this.velocityY = 0;
-        this.maxHp = 100;
-        this.hp = maxHp;
-        this.attackTimer = ATTACK_COOLDOWN;
+        this.stats = new BasePlayer();  // Базовые характеристики
+        this.hp = stats.getMaxHp();
+        this.attackTimer = stats.getAttackCooldown();
         this.alive = true;
-        this.damage = BASE_DAMAGE;
         this.bounds = new Rectangle(x, y, WIDTH, HEIGHT);
         this.currentState = new IdleState(this);
         this.currentState.enter();
@@ -85,25 +89,26 @@ public class Player {
         // Читаем WASD и обновляем velocityX/Y
         velocityX = 0;
         velocityY = 0;
+        float playerSpeed = stats.getSpeed();  // Берём скорость из stats
         
         if (Gdx.input.isKeyPressed(Input.Keys.W)) {
-            velocityY = SPEED;
+            velocityY = playerSpeed;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.S)) {
-            velocityY = -SPEED;
+            velocityY = -playerSpeed;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.D)) {
-            velocityX = SPEED;
+            velocityX = playerSpeed;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.A)) {
-            velocityX = -SPEED;
+            velocityX = -playerSpeed;
         }
         
         // Нормализуем диагональное движение
         float length = (float) Math.sqrt(velocityX * velocityX + velocityY * velocityY);
         if (length > 0) {
-            velocityX = (velocityX / length) * SPEED;
-            velocityY = (velocityY / length) * SPEED;
+            velocityX = (velocityX / length) * playerSpeed;
+            velocityY = (velocityY / length) * playerSpeed;
         }
         
         // Применяем скорость к позиции
@@ -120,7 +125,7 @@ public class Player {
         // Обновляем таймер атаки
         attackTimer -= delta;
         if (attackTimer <= 0) {
-            attackTimer = ATTACK_COOLDOWN;
+            attackTimer = stats.getAttackCooldown();  // Берём кулдаун из stats
             performAttack();
             changeState(new AttackState(this));
         }
@@ -144,13 +149,17 @@ public class Player {
 
     /**
      * Получает урон и проверяет смерть.
+     * Применяет снижение урона от ArmorDecorator.
      */
     public void takeDamage(float amount) {
-        hp -= amount;
+        // Применяем снижение урона (DamageReduction от ArmorDecorator)
+        float reduction = stats.getDamageReduction();
+        float actualDamage = amount * (1f - reduction);
+        hp -= actualDamage;
         
         // Публикуем событие урона
         EventBus.getInstance().post(
-            new GameEvent(GameEvent.Type.PLAYER_HURT, amount)
+            new GameEvent(GameEvent.Type.PLAYER_HURT, actualDamage)
         );
         
         if (hp <= 0) {
@@ -196,6 +205,35 @@ public class Player {
         if (currentState != null) {
             currentState.enter();
         }
+    }
+
+    /**
+     * Применяет апгрейд (Decorator) к характеристикам игрока.
+     * Фаза 7: Decorator паттерн.
+     */
+    public void applyUpgrade(PlayerDecorator decorator) {
+        int oldMaxHp = stats.getMaxHp();
+        this.stats = decorator;  // Оборачиваем новым декоратором
+        
+        // Если новый maxHp больше старого — добавляем разницу к текущему HP
+        int newMaxHp = stats.getMaxHp();
+        if (newMaxHp > oldMaxHp) {
+            hp += (newMaxHp - oldMaxHp);
+        }
+        
+        // Логируем применённый апгрейд и новые характеристики
+        System.out.println("Upgrade applied: " + stats.getDescription());
+        System.out.println("Stats -> HP:" + stats.getMaxHp() +
+                           " DMG:" + stats.getDamage() +
+                           " SPD:" + stats.getSpeed() +
+                           " CD:" + stats.getAttackCooldown());
+    }
+
+    /**
+     * Возвращает объект с характеристиками игрока.
+     */
+    public PlayerStats getStats() {
+        return stats;
     }
     
     /**

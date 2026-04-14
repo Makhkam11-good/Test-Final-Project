@@ -24,4 +24,14 @@ public class BasePlayer implements PlayerStats {
     public float getAttackCooldown() {
         return 1.0f;
     }
+
+    @Override
+    public float getDamageReduction() {
+        return 0.0f;
+    }
+
+    @Override
+    public String getDescription() {
+        return "Base Knight";
+    }
 }

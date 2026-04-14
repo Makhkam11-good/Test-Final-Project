@@ -13,4 +13,9 @@ public class PoisonDecorator extends PlayerDecorator {
     public int getDamage() {
         return wrapped.getDamage() + 10;
     }
+
+    @Override
+    public String getDescription() {
+        return "Poison Blade: +10 damage";
+    }
 }

@@ -6,7 +6,6 @@ import com.gladiator.managers.GameStateManager;
 import com.gladiator.screens.GameOverScreen;
 import com.gladiator.screens.GameScreen;
 import com.gladiator.screens.MenuScreen;
-import com.gladiator.screens.UpgradeScreen;
 import com.gladiator.screens.VictoryScreen;
 
 /**
@@ -27,7 +26,8 @@ public class GladiatorGame extends Game {
         // Регистрируем все экраны
         gsm.registerScreen(GameStateManager.State.MENU, new MenuScreen(gsm));
         gsm.registerScreen(GameStateManager.State.GAME, new GameScreen(gsm));
-        gsm.registerScreen(GameStateManager.State.UPGRADE, new UpgradeScreen(gsm));
+        // Фаза 7: UpgradeScreen создаётся динамически в GameScreen.onWaveCleared с текущим player
+        // gsm.registerScreen(GameStateManager.State.UPGRADE, new UpgradeScreen(gsm));
         gsm.registerScreen(GameStateManager.State.GAME_OVER, new GameOverScreen(gsm));
         gsm.registerScreen(GameStateManager.State.VICTORY, new VictoryScreen(gsm));
         

@@ -8,4 +8,6 @@ public interface PlayerStats {
     int getDamage();
     float getSpeed();
     float getAttackCooldown();
+    float getDamageReduction();  // множитель снижения урона (0.0 = нет, 0.2 = -20%)
+    String getDescription();      // описание для карточки апгрейда
 }

@@ -29,4 +29,14 @@ public abstract class PlayerDecorator implements PlayerStats {
     public float getAttackCooldown() {
         return wrapped.getAttackCooldown();
     }
+
+    @Override
+    public float getDamageReduction() {
+        return wrapped.getDamageReduction();
+    }
+
+    @Override
+    public String getDescription() {
+        return wrapped.getDescription();
+    }
 }
