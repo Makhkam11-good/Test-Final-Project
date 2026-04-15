@@ -12,7 +12,7 @@ import com.gladiator.managers.GameStateManager;
 
 /**
  * VictoryScreen - экран победы (появляется после победы над Боссом на волне 10).
- * Фаза 6: показывает счёт, сложность и опции для повтора.
+ * Фаза 8: обновлено для показа победы над Demon King.
  */
 public class VictoryScreen implements Screen {
     
@@ -44,17 +44,21 @@ public class VictoryScreen implements Screen {
         
         batch.begin();
         
-        // Рисуем текст Victory
+        // Рисуем текст Victory (Фаза 8: обновлено для Boss)
         font.getData().setScale(3.0f);
-        font.draw(batch, "VICTORY!", 250, 350);
+        font.draw(batch, "⚔ VICTORY! ⚔", 200, 350);
         
-        // Фаза 6: показываем счёт и сложность
+        // Рисуем текст о победе над боссом
+        font.getData().setScale(2.0f);
+        font.draw(batch, "You defeated the Demon King!", 100, 280);
+        
+        // Фаза 8: показываем счёт и сложность
         font.getData().setScale(1.5f);
-        font.draw(batch, "Score: " + GameManager.getInstance().getScore(), 200, 280);
-        font.draw(batch, "Difficulty: " + GameManager.getInstance().getDifficulty().getName(), 200, 230);
+        font.draw(batch, "Score: " + GameManager.getInstance().getScore(), 200, 200);
+        font.draw(batch, "Difficulty: " + GameManager.getInstance().getDifficulty().getName(), 200, 150);
         
         font.getData().setScale(1.2f);
-        font.draw(batch, "[R] Play Again  [ESC] Menu", 200, 100);
+        font.draw(batch, "[R] Play Again   [ESC] Menu", 200, 80);
         
         batch.end();
         
