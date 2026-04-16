@@ -1,15 +1,19 @@
 package com.gladiator.entities;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.Rectangle;
 import com.gladiator.events.EventBus;
 import com.gladiator.events.GameEvent;
+import com.gladiator.managers.AssetManager;
 
 /**
  * Enemy - базовый класс врага (Слизь, Гоблин).
  * Враги движутся к игроку и наносят урон при контакте.
  * Фаза 5: реализация с движением и коллизией.
+ * Фаза 9: анимация спрайтов
  */
 public class Enemy {
     // Размеры
@@ -31,7 +35,11 @@ public class Enemy {
     // Хитбокс
     public Rectangle bounds;
     
-    // Ресурс для рисования красного пикселя
+    // Поля для анимации (Фаза 9)
+    public String animKey = "slime_walk";  // Ключ анимации, устанавливается фабриками
+    private float stateTime = 0f;
+    
+    // Ресурс для рисования красного пикселя (fallback если спрайт не найден)
     private static com.badlogic.gdx.graphics.Texture redPixel;
     
     public Enemy() {
@@ -62,6 +70,9 @@ public class Enemy {
             return;
         }
         
+        // Обновляем время для анимации
+        stateTime += delta;
+        
         // Вычисляем вектор к игроку
         float dx = playerX - x;
         float dy = playerY - y;
@@ -82,17 +93,33 @@ public class Enemy {
     }
     
     /**
-     * Рисует врага (красный квадрат).
+     * Рисует врага с анимацией спрайтов (Фаза 9).
+     * Fallback: если спрайт не найден, рисует красный квадрат как раньше.
      */
     public void render(SpriteBatch batch) {
         if (!alive) {
             return;
         }
         
-        if (redPixel != null) {
-            batch.setColor(Color.RED);
-            batch.draw(redPixel, x, y, WIDTH, HEIGHT);
-            batch.setColor(Color.WHITE);
+        // Получаем анимацию по ключу
+        Animation<TextureRegion> animation = AssetManager.getInstance().getAnimation(animKey);
+        
+        if (animation != null) {
+            // Получаем текущий кадр анимации
+            TextureRegion frame = animation.getKeyFrame(stateTime, true);
+            
+            // Флипируем если враг движется влево
+            // (можно определить по velocityX если надо, но пока используем простую логику)
+            
+            // Рисуем спрайт
+            batch.draw(frame, x, y, WIDTH, HEIGHT);
+        } else {
+            // Fallback: если спрайт не найден, рисуем красный квадрат как раньше
+            if (redPixel != null) {
+                batch.setColor(Color.RED);
+                batch.draw(redPixel, x, y, WIDTH, HEIGHT);
+                batch.setColor(Color.WHITE);
+            }
         }
     }
     

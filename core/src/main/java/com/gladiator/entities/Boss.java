@@ -1,7 +1,9 @@
 package com.gladiator.entities;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
@@ -9,10 +11,12 @@ import com.gladiator.entities.boss.BossState;
 import com.gladiator.entities.boss.IdleBossState;
 import com.gladiator.events.EventBus;
 import com.gladiator.events.GameEvent;
+import com.gladiator.managers.AssetManager;
 
 /**
  * Boss (Финальный Босс) - враг на волне 10, использует State паттерн для смены поведения.
  * Фаза 8: полная реализация с State паттерном.
+ * Фаза 9: анимация спрайтов
  */
 public class Boss extends Enemy {
     // Константы
@@ -28,6 +32,9 @@ public class Boss extends Enemy {
     
     // Скорость
     public float velocityX, velocityY;
+    
+    // Поле для анимации (Фаза 9)
+    private float stateTime = 0f;
     
     public Boss(float x, float y, int hp) {
         super();
@@ -60,6 +67,9 @@ public class Boss extends Enemy {
             return;
         }
         
+        // Обновляем время для анимации (Фаза 9)
+        stateTime += delta;
+        
         // Сохраняй направление для Dash
         float dx = playerX - x;
         float dy = playerY - y;
@@ -90,24 +100,44 @@ public class Boss extends Enemy {
         // Этот метод может остаться пустым, так как Boss рисуется через GameScreen
     }
     
-    public void renderBoss(ShapeRenderer shapeRenderer) {
+    public void renderBoss(SpriteBatch batch, ShapeRenderer shapeRenderer) {
         if (!alive) {
             return;
         }
         
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        // Получаем анимацию босса (Фаза 9)
+        Animation<TextureRegion> animation = AssetManager.getInstance().getAnimation("boss_walk");
         
-        // Рисуй фиолетовый или ярко-красный прямоугольник в зависимости от isDashing
-        if (isDashing) {
-            shapeRenderer.setColor(Color.RED);
+        if (animation != null) {
+            // Получаем текущий кадр анимации
+            TextureRegion frame = animation.getKeyFrame(stateTime, true);
+            
+            // Во время Dash рисуй с красным оттенком, иначе белый
+            if (isDashing) {
+                batch.setColor(1f, 0.3f, 0.3f, 1f);
+            } else {
+                batch.setColor(Color.WHITE);
+            }
+            
+            // Рисуем спрайт
+            batch.draw(frame, x, y, BOSS_WIDTH, BOSS_HEIGHT);
+            batch.setColor(Color.WHITE);
         } else {
-            shapeRenderer.setColor(new Color(0.5f, 0f, 0.8f, 1f)); // Фиолетовый
+            // Fallback: если спрайт не найден, рисуем цветной прямоугольник как раньше
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+            
+            // Рисуй фиолетовый или ярко-красный прямоугольник в зависимости от isDashing
+            if (isDashing) {
+                shapeRenderer.setColor(Color.RED);
+            } else {
+                shapeRenderer.setColor(new Color(0.5f, 0f, 0.8f, 1f)); // Фиолетовый
+            }
+            shapeRenderer.rect(x, y, BOSS_WIDTH, BOSS_HEIGHT);
+            
+            shapeRenderer.end();
         }
-        shapeRenderer.rect(x, y, BOSS_WIDTH, BOSS_HEIGHT);
         
-        shapeRenderer.end();
-        
-        // Рисуй HP бар над Боссом
+        // Рисуй HP бар над Боссом (всегда через ShapeRenderer)
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         
         // Фон HP бара (серый)

@@ -15,7 +15,7 @@ import com.gladiator.entities.Player;
 public class GameStateManager {
 
     public enum State {
-        MENU, GAME, UPGRADE, GAME_OVER, VICTORY
+        LOADING, MENU, GAME, UPGRADE, GAME_OVER, VICTORY
     }
 
     private Game game;

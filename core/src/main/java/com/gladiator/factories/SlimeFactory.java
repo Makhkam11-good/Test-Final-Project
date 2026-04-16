@@ -8,6 +8,7 @@ import com.gladiator.managers.GameManager;
  * SlimeFactory - фабрика для создания Слизи.
  * Слизь: HP=20, damage=5, speed=60, reward=10.
  * Фаза 6: применяет множители сложности из GameManager.
+ * Фаза 9: устанавливает animKey для спрайта
  */
 public class SlimeFactory extends EnemyFactory {
 
@@ -23,6 +24,9 @@ public class SlimeFactory extends EnemyFactory {
         enemy.scoreReward = 10;
         enemy.alive = true;
         enemy.bounds = new Rectangle(x, y, Enemy.WIDTH, Enemy.HEIGHT);
+        
+        // Установим ключ анимации (Фаза 9)
+        enemy.animKey = "slime_walk";
         
         // Применяем множители сложности (Фаза 6)
         float speedMult = GameManager.getInstance().getDifficulty().getEnemySpeedMult();

@@ -143,6 +143,14 @@ public class UpgradeScreen implements Screen {
         PlayerDecorator chosen = options.get(index);
         System.out.println("Player chose: " + chosen.getDescription());
         player.applyUpgrade(chosen);
+        
+        // Фаза 9: воспроизведи звук выбора апгрейда
+        com.badlogic.gdx.audio.Sound upgradeSound = 
+            com.gladiator.managers.AssetManager.getInstance().getSound("upgrade");
+        if (upgradeSound != null) {
+            upgradeSound.play(1.0f);
+        }
+        
         gsm.pop();  // Возвращаемся в GameScreen
     }
 

@@ -4,7 +4,9 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
 import com.gladiator.decorator.BasePlayer;
@@ -16,10 +18,12 @@ import com.gladiator.entities.states.IdleState;
 import com.gladiator.entities.states.PlayerState;
 import com.gladiator.events.EventBus;
 import com.gladiator.events.GameEvent;
+import com.gladiator.managers.AssetManager;
 
 /**
  * Player (Рыцарь) - главный персонаж, управляется игроком через WASD.
  * Фаза 3: полная реализация с движением, автоатакой и паттерном State.
+ * Фаза 9: анимация спрайтов
  */
 public class Player {
     // Константы
@@ -46,7 +50,10 @@ public class Player {
     // Поле - характеристики Рыцаря (Decorator паттерн)
     private PlayerStats stats;
     
-    // Ресурс для рисования белого пикселя
+    // Поле - для анимации (Фаза 9)
+    private float stateTime = 0f;
+    
+    // Ресурс для рисования белого пикселя (fallback если спрайт не найден)
     private static Texture whitePixel;
     
     public Player() {
@@ -85,6 +92,9 @@ public class Player {
             changeState(new DeadState(this));
             return;
         }
+        
+        // Обновляем время для анимации
+        stateTime += delta;
         
         // Читаем WASD и обновляем velocityX/Y
         velocityX = 0;
@@ -137,13 +147,45 @@ public class Player {
     }
 
     /**
-     * Рисует Player как белый прямоугольник.
+     * Рисует Player с анимацией спрайтов (Фаза 9).
+     * Fallback: если спрайт не найден, рисует белый прямоугольник как раньше.
      */
     public void render(SpriteBatch batch) {
-        if (whitePixel != null) {
-            batch.setColor(1, 1, 1, 1);
-            batch.draw(whitePixel, x, y, WIDTH, HEIGHT);
-            batch.setColor(1, 1, 1, 1);
+        // Выбираем анимацию по текущему состоянию
+        String animKey = "player_idle";  // по умолчанию
+        if (currentState instanceof IdleState) {
+            animKey = "player_idle";
+        } else if (currentState instanceof com.gladiator.entities.states.RunState) {
+            animKey = "player_run";
+        } else if (currentState instanceof AttackState) {
+            animKey = "player_attack";
+        } else if (currentState instanceof DeadState) {
+            animKey = "player_dead";
+        }
+        
+        // Получаем анимацию
+        Animation<TextureRegion> animation = AssetManager.getInstance().getAnimation(animKey);
+        
+        if (animation != null) {
+            // Получаем текущий кадр анимации
+            TextureRegion frame = animation.getKeyFrame(stateTime, true);
+            
+            // Флипируем по горизонтали если идём влево
+            if (velocityX < 0 && !frame.isFlipX()) {
+                frame.flip(true, false);
+            } else if (velocityX > 0 && frame.isFlipX()) {
+                frame.flip(true, false);
+            }
+            
+            // Рисуем спрайт
+            batch.draw(frame, x, y, WIDTH, HEIGHT);
+        } else {
+            // Fallback: если спрайт не найден, рисуем белый прямоугольник как раньше
+            if (whitePixel != null) {
+                batch.setColor(1, 1, 1, 1);
+                batch.draw(whitePixel, x, y, WIDTH, HEIGHT);
+                batch.setColor(1, 1, 1, 1);
+            }
         }
     }
 
@@ -196,12 +238,14 @@ public class Player {
 
     /**
      * Переключает состояние Player.
+     * Сбрасывает stateTime для новой анимации.
      */
     public void changeState(PlayerState newState) {
         if (currentState != null) {
             currentState.exit();
         }
         currentState = newState;
+        stateTime = 0f;  // Сбрасываем время анимации
         if (currentState != null) {
             currentState.enter();
         }

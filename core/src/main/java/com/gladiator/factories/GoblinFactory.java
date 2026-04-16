@@ -8,6 +8,7 @@ import com.gladiator.managers.GameManager;
  * GoblinFactory - фабрика для создания Гоблинов.
  * Гоблин: HP=40, damage=12, speed=100, reward=25.
  * Фаза 6: применяет множители сложности из GameManager.
+ * Фаза 9: устанавливает animKey для спрайта
  */
 public class GoblinFactory extends EnemyFactory {
 
@@ -23,6 +24,9 @@ public class GoblinFactory extends EnemyFactory {
         enemy.scoreReward = 25;
         enemy.alive = true;
         enemy.bounds = new Rectangle(x, y, Enemy.WIDTH, Enemy.HEIGHT);
+        
+        // Установим ключ анимации (Фаза 9)
+        enemy.animKey = "goblin_walk";
         
         // Применяем множители сложности (Фаза 6)
         float speedMult = GameManager.getInstance().getDifficulty().getEnemySpeedMult();

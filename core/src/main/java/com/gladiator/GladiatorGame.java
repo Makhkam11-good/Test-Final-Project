@@ -5,6 +5,7 @@ import com.gladiator.managers.AssetManager;
 import com.gladiator.managers.GameStateManager;
 import com.gladiator.screens.GameOverScreen;
 import com.gladiator.screens.GameScreen;
+import com.gladiator.screens.LoadingScreen;
 import com.gladiator.screens.MenuScreen;
 import com.gladiator.screens.VictoryScreen;
 
@@ -17,13 +18,11 @@ public class GladiatorGame extends Game {
 
     @Override
     public void create() {
-        // Загружаем все игровые ресурсы через Singleton AssetManager
-        AssetManager.getInstance().loadAll();
-        
-        // Создаём менеджер состояний
+        // Создаём менеджер состояний перед загрузкой ресурсов
         gsm = new GameStateManager(this);
         
-        // Регистрируем все экраны
+        // Регистрируем все экраны, включая LoadingScreen
+        gsm.registerScreen(GameStateManager.State.LOADING, new LoadingScreen(gsm));
         gsm.registerScreen(GameStateManager.State.MENU, new MenuScreen(gsm));
         gsm.registerScreen(GameStateManager.State.GAME, new GameScreen(gsm));
         // Фаза 7: UpgradeScreen создаётся динамически в GameScreen.onWaveCleared с текущим player
@@ -31,8 +30,11 @@ public class GladiatorGame extends Game {
         gsm.registerScreen(GameStateManager.State.GAME_OVER, new GameOverScreen(gsm));
         gsm.registerScreen(GameStateManager.State.VICTORY, new VictoryScreen(gsm));
         
-        // Переходим на начальный экран (MenuScreen)
-        gsm.set(GameStateManager.State.MENU);
+        // Все ресурсы ставятся в очередь загрузки (не блокирует)
+        AssetManager.getInstance().loadAll();
+        
+        // Переходим на экран загрузки (асинхронной)
+        gsm.set(GameStateManager.State.LOADING);
     }
 
     @Override

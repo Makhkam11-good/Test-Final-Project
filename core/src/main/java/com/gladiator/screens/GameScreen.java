@@ -1,13 +1,15 @@
 package com.gladiator.screens;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
@@ -101,6 +103,24 @@ public class GameScreen implements Screen {
                 gsm.set(GameStateManager.State.VICTORY);
             }
         );
+        
+        // Фаза 9: подписываемся на звуки через Observer
+        EventBus.getInstance().subscribe(GameEvent.Type.ENEMY_DIED, event -> {
+            Sound sound = com.gladiator.managers.AssetManager.getInstance().getSound("enemy_death");
+            if (sound != null) sound.play(0.8f);
+        });
+        
+        EventBus.getInstance().subscribe(GameEvent.Type.PLAYER_HURT, event -> {
+            Sound sound = com.gladiator.managers.AssetManager.getInstance().getSound("hit");
+            if (sound != null) sound.play(1.0f);
+        });
+        
+        EventBus.getInstance().subscribe(GameEvent.Type.BOSS_DIED, event -> {
+            Music bgm = com.gladiator.managers.AssetManager.getInstance().getBgm();
+            if (bgm != null) {
+                bgm.stop();
+            }
+        });
     }
 
     /**
@@ -118,6 +138,14 @@ public class GameScreen implements Screen {
             boss = (Boss) new BossFactory().create(400 - 40, 440);
             levelManager.startWave(1);  // 1 враг (Босс считается как 1)
             System.out.println("WAVE 10 — BOSS APPEARS!");
+            
+            // Фаза 9: воспроизведи звук появления босса
+            Sound bossRoarSound = 
+                com.gladiator.managers.AssetManager.getInstance().getSound("boss_roar");
+            if (bossRoarSound != null) {
+                bossRoarSound.play(1.0f);
+            }
+            
             return;
         }
         
@@ -270,8 +298,23 @@ public class GameScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        // Очищаем экран тёмно-зелёным цветом (арена)
-        ScreenUtils.clear(0.1f, 0.3f, 0.1f, 1);
+        // Очищаем экран чёрным
+        ScreenUtils.clear(0, 0, 0, 1);
+        
+        // Рисуем фон арены (Фаза 9)
+        batch.begin();
+        Texture bgTexture = 
+            com.gladiator.managers.AssetManager.getInstance().getTexture("backgrounds/arena.png");
+        if (bgTexture != null) {
+            batch.draw(bgTexture, 0, 0, 800, 480);
+        } else {
+            // Fallback: если фон не найден, рисуем тёмно-зелёный прямоугольник как раньше
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+            shapeRenderer.setColor(0.1f, 0.3f, 0.1f, 1);
+            shapeRenderer.rect(0, 0, 800, 480);
+            shapeRenderer.end();
+        }
+        batch.end();
         
         // Обновляем Player
         player.update(delta);
@@ -367,7 +410,9 @@ public class GameScreen implements Screen {
         
         // Фаза 8: рисуем Босса если волна 10
         if (bossWave && boss != null && boss.alive) {
-            boss.renderBoss(shapeRenderer);
+            batch.begin();
+            boss.renderBoss(batch, shapeRenderer);
+            batch.end();
         }
         
         // Рисуем Player
@@ -485,12 +530,6 @@ public class GameScreen implements Screen {
         }
         if (shapeRenderer != null) {
             shapeRenderer.dispose();
-        }
-        if (player != null) {
-            Player.dispose();
-        }
-        if (enemies != null) {
-            Enemy.dispose();
         }
     }
 }
