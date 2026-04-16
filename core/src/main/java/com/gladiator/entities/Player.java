@@ -170,15 +170,25 @@ public class Player {
             // Получаем текущий кадр анимации
             TextureRegion frame = animation.getKeyFrame(stateTime, true);
             
-            // Флипируем по горизонтали если идём влево
-            if (velocityX < 0 && !frame.isFlipX()) {
-                frame.flip(true, false);
-            } else if (velocityX > 0 && frame.isFlipX()) {
-                frame.flip(true, false);
+            // Проверяем что кадр не null
+            if (frame != null) {
+                // Флипируем по горизонтали если идём влево
+                if (velocityX < 0 && !frame.isFlipX()) {
+                    frame.flip(true, false);
+                } else if (velocityX > 0 && frame.isFlipX()) {
+                    frame.flip(true, false);
+                }
+                
+                // Рисуем спрайт с стандартным размером игрока
+                batch.draw(frame, x, y, WIDTH, HEIGHT);
+            } else {
+                // Fallback если кадр null - рисуем белый квадрат
+                if (whitePixel != null) {
+                    batch.setColor(1, 1, 1, 1);
+                    batch.draw(whitePixel, x, y, WIDTH, HEIGHT);
+                    batch.setColor(1, 1, 1, 1);
+                }
             }
-            
-            // Рисуем спрайт
-            batch.draw(frame, x, y, WIDTH, HEIGHT);
         } else {
             // Fallback: если спрайт не найден, рисуем белый прямоугольник как раньше
             if (whitePixel != null) {

@@ -112,16 +112,31 @@ public class Boss extends Enemy {
             // Получаем текущий кадр анимации
             TextureRegion frame = animation.getKeyFrame(stateTime, true);
             
-            // Во время Dash рисуй с красным оттенком, иначе белый
-            if (isDashing) {
-                batch.setColor(1f, 0.3f, 0.3f, 1f);
-            } else {
+            // Проверяем что кадр не null
+            if (frame != null) {
+                // Во время Dash рисуй с красным оттенком, иначе белый
+                if (isDashing) {
+                    batch.setColor(1f, 0.3f, 0.3f, 1f);
+                } else {
+                    batch.setColor(Color.WHITE);
+                }
+                
+                // Рисуем спрайт с стандартным размером босса
+                batch.draw(frame, x, y, BOSS_WIDTH, BOSS_HEIGHT);
                 batch.setColor(Color.WHITE);
+            } else {
+                // Fallback если кадр null - рисуем цветной прямоугольник
+                shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+                
+                if (isDashing) {
+                    shapeRenderer.setColor(Color.RED);
+                } else {
+                    shapeRenderer.setColor(new Color(0.5f, 0f, 0.8f, 1f)); // Фиолетовый
+                }
+                shapeRenderer.rect(x, y, BOSS_WIDTH, BOSS_HEIGHT);
+                
+                shapeRenderer.end();
             }
-            
-            // Рисуем спрайт
-            batch.draw(frame, x, y, BOSS_WIDTH, BOSS_HEIGHT);
-            batch.setColor(Color.WHITE);
         } else {
             // Fallback: если спрайт не найден, рисуем цветной прямоугольник как раньше
             shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);

@@ -108,11 +108,21 @@ public class Enemy {
             // Получаем текущий кадр анимации
             TextureRegion frame = animation.getKeyFrame(stateTime, true);
             
-            // Флипируем если враг движется влево
-            // (можно определить по velocityX если надо, но пока используем простую логику)
-            
-            // Рисуем спрайт
-            batch.draw(frame, x, y, WIDTH, HEIGHT);
+            // Проверяем что кадр не null
+            if (frame != null) {
+                // Флипируем если враг движется влево
+                // (можно определить по velocityX если надо, но пока используем простую логику)
+                
+                // Рисуем спрайт с стандартным размером врага
+                batch.draw(frame, x, y, WIDTH, HEIGHT);
+            } else {
+                // Fallback если кадр null - рисуем красный квадрат
+                if (redPixel != null) {
+                    batch.setColor(Color.RED);
+                    batch.draw(redPixel, x, y, WIDTH, HEIGHT);
+                    batch.setColor(Color.WHITE);
+                }
+            }
         } else {
             // Fallback: если спрайт не найден, рисуем красный квадрат как раньше
             if (redPixel != null) {

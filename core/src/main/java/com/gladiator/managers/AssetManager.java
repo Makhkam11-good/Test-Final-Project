@@ -21,15 +21,27 @@ public class AssetManager {
     private com.badlogic.gdx.assets.AssetManager manager;
     private Map<String, TextureRegion> regions;
     private Map<String, Animation<TextureRegion>> animations;
+    private Map<String, AnimationSize> animationSizes;  // Информация о размерах каждой анимации
     private Music bgm;
     private Map<String, Sound> sounds;
     private boolean loaded;
+
+    // Вспомогательный класс для хранения размеров анимации
+    public static class AnimationSize {
+        public float width;
+        public float height;
+        public AnimationSize(float width, float height) {
+            this.width = width;
+            this.height = height;
+        }
+    }
 
     // Приватный конструктор - запрещаем создание экземпляров извне
     private AssetManager() {
         manager = new com.badlogic.gdx.assets.AssetManager();
         regions = new HashMap<>();
         animations = new HashMap<>();
+        animationSizes = new HashMap<>();
         sounds = new HashMap<>();
         loaded = false;
     }
@@ -113,15 +125,14 @@ public class AssetManager {
      * Завершить загрузку - нарезать анимации, загрузить звуки.
      */
     private void finishLoading() {
-        // Нарезка спрайт-листов на кадры анимации
-        // TODO: Параметры (frameWidth, frameHeight, frameDuration) нужно подобрать под конкретный скачанный спрайт-лист
-        buildAnimation("player_idle", "sprites/player/idle.png", 4, 64, 64, 0.15f);
-        buildAnimation("player_run", "sprites/player/run.png", 6, 64, 64, 0.10f);
-        buildAnimation("player_attack", "sprites/player/attack.png", 6, 64, 64, 0.08f);
-        buildAnimation("player_dead", "sprites/player/dead.png", 4, 64, 64, 0.12f);
-        buildAnimation("slime_walk", "sprites/enemies/slime.png", 4, 32, 32, 0.15f);
-        buildAnimation("goblin_walk", "sprites/enemies/goblin.png", 6, 48, 48, 0.10f);
-        buildAnimation("boss_walk", "sprites/enemies/boss.png", 6, 96, 96, 0.12f);
+        // Нарезка спрайт-листов на кадры анимации (автоматическая подгонка размеров)
+        buildAnimationAuto("player_idle", "sprites/player/idle.png", 4, 0.15f);
+        buildAnimationAuto("player_run", "sprites/player/run.png", 6, 0.10f);
+        buildAnimationAuto("player_attack", "sprites/player/attack.png", 6, 0.08f);
+        buildAnimationAuto("player_dead", "sprites/player/dead.png", 4, 0.12f);
+        buildAnimationAuto("slime_walk", "sprites/enemies/slime.png", 4, 0.15f);
+        buildAnimationAuto("goblin_walk", "sprites/enemies/goblin.png", 6, 0.10f);
+        buildAnimationAuto("boss_walk", "sprites/enemies/boss.png", 6, 0.12f);
 
         // Загрузи звуки
         loadSounds();
@@ -130,15 +141,14 @@ public class AssetManager {
     }
 
     /**
-     * Построить анимацию из спрайт-листа.
+     * Автоматически определить размеры и построить анимацию из спрайт-листа.
+     * Пробует все возможные раскладки и выбирает наиболее подходящую.
      * @param key ключ для хранения анимации
      * @param path путь к файлу спрайт-листа
-     * @param frames количество кадров в анимации
-     * @param frameW ширина одного кадра (в пиксельях)
-     * @param frameH высота одного кадра (в пиксельях)
+     * @param frameCount количество кадров в анимации
      * @param duration длительность одного кадра (в секундах)
      */
-    private void buildAnimation(String key, String path, int frames, int frameW, int frameH, float duration) {
+    private void buildAnimationAuto(String key, String path, int frameCount, float duration) {
         try {
             // Проверяем есть ли текстура в менеджере
             if (!manager.contains(path, Texture.class)) {
@@ -152,21 +162,68 @@ public class AssetManager {
                 return;
             }
 
+            int sheetWidth = sheet.getWidth();
+            int sheetHeight = sheet.getHeight();
+            
+            // Определяем размер одного кадра автоматически
+            // Пробуем все делители frameCount и выбираем наиболее подходящую раскладку
+            int frameW = 32, frameH = 32; // default
+            float bestScore = Float.MAX_VALUE;
+            
+            // Пробуем все делители frameCount
+            for (int cols = 1; cols <= frameCount; cols++) {
+                if (frameCount % cols == 0) {
+                    int rows = frameCount / cols;
+                    
+                    // Пробуем эту раскладку
+                    int possibleW = sheetWidth / cols;
+                    int possibleH = sheetHeight / rows;
+                    
+                    // Проверяем что размеры разумные (минимум 16x16)
+                    if (possibleW >= 16 && possibleH >= 16) {
+                        // Оцениваем как хорошо эта раскладка подходит
+                        // Предпочитаем кадры которые примерно квадратные или чуть выше чем в ширину
+                        float aspectRatio = Math.abs((float)possibleW / possibleH - 0.8f);
+                        
+                        if (aspectRatio < bestScore) {
+                            bestScore = aspectRatio;
+                            frameW = possibleW;
+                            frameH = possibleH;
+                        }
+                    }
+                }
+            }
+            
+            // Логируем вычисленную раскладку
+            int cols = sheetWidth / frameW;
+            int rows = sheetHeight / frameH;
+            Gdx.app.log("AssetManager", "Layout: " + key + " -> " + cols + "x" + rows + " grid, frame size: " + frameW + "x" + frameH);
+
+            // Разбиваем спрайт-лист
             TextureRegion[][] tmp = TextureRegion.split(sheet, frameW, frameH);
             if (tmp == null || tmp.length == 0) {
                 Gdx.app.error("AssetManager", "Failed to split texture: " + path);
                 return;
             }
             
-            TextureRegion[] anim = new TextureRegion[frames];
-            for (int i = 0; i < frames && i < tmp[0].length; i++) {
-                anim[i] = tmp[0][i];
+            // Собираем все кадры из всех рядов
+            TextureRegion[] anim = new TextureRegion[frameCount];
+            int frameIndex = 0;
+            for (int row = 0; row < tmp.length && frameIndex < frameCount; row++) {
+                for (int col = 0; col < tmp[row].length && frameIndex < frameCount; col++) {
+                    anim[frameIndex] = tmp[row][col];
+                    frameIndex++;
+                }
             }
+            
             Animation<TextureRegion> animation = new Animation<>(duration, anim);
             animation.setPlayMode(Animation.PlayMode.LOOP);
             animations.put(key, animation);
+            
+            // Сохраняем размеры этой анимации
+            animationSizes.put(key, new AnimationSize(frameW, frameH));
 
-            Gdx.app.log("AssetManager", "Built animation: " + key + " (" + frames + " frames)");
+            Gdx.app.log("AssetManager", "Built animation: " + key + " (" + frameCount + " frames, " + frameW + "x" + frameH + ")");
         } catch (Exception e) {
             Gdx.app.error("AssetManager", "Error building animation " + key + ": " + e.getMessage());
         }
@@ -224,6 +281,14 @@ public class AssetManager {
      */
     public Animation<TextureRegion> getAnimation(String key) {
         return animations.getOrDefault(key, null);
+    }
+
+    /**
+     * Получить размеры кадра для анимации.
+     * @return объект с шириной и высотой, или null если анимация не найдена
+     */
+    public AnimationSize getAnimationSize(String key) {
+        return animationSizes.getOrDefault(key, null);
     }
 
     /**
