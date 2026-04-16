@@ -1,6 +1,9 @@
 package com.gladiator.entities;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -24,6 +27,9 @@ public class Boss extends Enemy {
     public static final float BOSS_HEIGHT = 80f;
     private static final float DASH_DAMAGE = 40f;
     private static final float CONTACT_DAMAGE = 20f;
+    
+    // Белый пиксель для отрисовки HP бара
+    private static Texture whitePixel;
     
     // State паттерн
     public BossState currentState;
@@ -52,7 +58,20 @@ public class Boss extends Enemy {
         this.lastDirX = 0;
         this.lastDirY = -1;  // Направление вниз по умолчанию
         
+        // Инициализируем белый пиксель если ещё не создан
+        if (whitePixel == null) {
+            createWhitePixel();
+        }
+        
         currentState.enter(this);
+    }
+    
+    private static void createWhitePixel() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(1f, 1f, 1f, 1f);
+        pixmap.drawPixel(0, 0);
+        whitePixel = new Texture(pixmap);
+        pixmap.dispose();
     }
     
     public void changeState(BossState newState) {
@@ -125,51 +144,48 @@ public class Boss extends Enemy {
                 batch.draw(frame, x, y, BOSS_WIDTH, BOSS_HEIGHT);
                 batch.setColor(Color.WHITE);
             } else {
-                // Fallback если кадр null - рисуем цветной прямоугольник
-                shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-                
-                if (isDashing) {
-                    shapeRenderer.setColor(Color.RED);
-                } else {
-                    shapeRenderer.setColor(new Color(0.5f, 0f, 0.8f, 1f)); // Фиолетовый
+                // Fallback если кадр null - рисуем цветной прямоугольник через batch
+                if (whitePixel != null) {
+                    if (isDashing) {
+                        batch.setColor(1f, 0f, 0f, 1f);
+                    } else {
+                        batch.setColor(0.5f, 0f, 0.8f, 1f);
+                    }
+                    batch.draw(whitePixel, x, y, BOSS_WIDTH, BOSS_HEIGHT);
+                    batch.setColor(Color.WHITE);
                 }
-                shapeRenderer.rect(x, y, BOSS_WIDTH, BOSS_HEIGHT);
-                
-                shapeRenderer.end();
             }
         } else {
-            // Fallback: если спрайт не найден, рисуем цветной прямоугольник как раньше
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            
-            // Рисуй фиолетовый или ярко-красный прямоугольник в зависимости от isDashing
-            if (isDashing) {
-                shapeRenderer.setColor(Color.RED);
-            } else {
-                shapeRenderer.setColor(new Color(0.5f, 0f, 0.8f, 1f)); // Фиолетовый
+            // Fallback: если спрайт не найден, рисуем цветной прямоугольник через batch
+            if (whitePixel != null) {
+                if (isDashing) {
+                    batch.setColor(1f, 0f, 0f, 1f);
+                } else {
+                    batch.setColor(0.5f, 0f, 0.8f, 1f);
+                }
+                batch.draw(whitePixel, x, y, BOSS_WIDTH, BOSS_HEIGHT);
+                batch.setColor(Color.WHITE);
             }
-            shapeRenderer.rect(x, y, BOSS_WIDTH, BOSS_HEIGHT);
-            
-            shapeRenderer.end();
         }
         
-        // Рисуй HP бар над Боссом (всегда через ShapeRenderer)
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        
-        // Фон HP бара (серый)
-        float barX = x;
-        float barY = y + BOSS_HEIGHT + 4;
-        float barWidth = BOSS_WIDTH;
-        float barHeight = 8;
-        
-        shapeRenderer.setColor(Color.DARK_GRAY);
-        shapeRenderer.rect(barX, barY, barWidth, barHeight);
-        
-        // Полоска HP (зелёная)
-        shapeRenderer.setColor(Color.GREEN);
-        float hpBarWidth = barWidth * (hp / maxHp);
-        shapeRenderer.rect(barX, barY, hpBarWidth, barHeight);
-        
-        shapeRenderer.end();
+        // Рисуй HP бар над Боссом через batch (не ShapeRenderer!)
+        if (whitePixel != null) {
+            float barX = x;
+            float barY = y + BOSS_HEIGHT + 4;
+            float barWidth = BOSS_WIDTH;
+            float barHeight = 8;
+            
+            // Фон HP бара (серый)
+            batch.setColor(0.3f, 0.3f, 0.3f, 1f);
+            batch.draw(whitePixel, barX, barY, barWidth, barHeight);
+            
+            // Полоска HP (зелёная)
+            batch.setColor(Color.GREEN);
+            float hpBarWidth = barWidth * (hp / maxHp);
+            batch.draw(whitePixel, barX, barY, hpBarWidth, barHeight);
+            
+            batch.setColor(Color.WHITE);
+        }
     }
     
     @Override
@@ -191,5 +207,12 @@ public class Boss extends Enemy {
     
     public float getContactDamage() {
         return isDashing ? DASH_DAMAGE : CONTACT_DAMAGE;
+    }
+    
+    public static void disposeBoss() {
+        if (whitePixel != null) {
+            whitePixel.dispose();
+            whitePixel = null;
+        }
     }
 }
