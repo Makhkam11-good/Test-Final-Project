@@ -136,6 +136,9 @@ public class Boss extends Enemy {
         System.out.println("Boss HP: " + hp + "/" + maxHp);
         if (hp <= 0) {
             alive = false;
+            // Публикуем ENEMY_DIED чтобы LevelManager узнал об окончании волны
+            EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED));
+            // Публикуем BOSS_DIED для перехода на VictoryScreen
             EventBus.getInstance().post(new GameEvent(GameEvent.Type.BOSS_DIED));
             System.out.println("BOSS DEFEATED!");
         }

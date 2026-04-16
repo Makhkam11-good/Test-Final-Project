@@ -43,6 +43,9 @@ public class GameScreen implements Screen {
     private List<Enemy> enemies;
     private float spawnInterval;  // Фаза 6: интервал спавна из GameManager
     private float spawnTimer;
+    private boolean waveCleared = false;  // Флаг для отложенной обработки окончания волны
+    private boolean enemiesListModified = false;  // Флаг для защиты от модификации листа
+    
     
     // Босс (Фаза 8)
     private Boss boss = null;
@@ -104,9 +107,13 @@ public class GameScreen implements Screen {
      * Спавнит волну врагов. Фаза 8: добавлена волна 10 с Боссом.
      */
     private void spawnWave(int wave) {
+        waveCleared = false;  // Сбрасываем флаг при спавне новой волны
+        enemiesListModified = false;  // Сбрасываем флаг модификации
+        
         if (wave == 10) {
             bossWave = true;
             enemies.clear();
+            enemiesListModified = true;  // Отмечаем что лист был изменён
             // Спавни Босса по центру верхнего края
             boss = (Boss) new BossFactory().create(400 - 40, 440);
             levelManager.startWave(1);  // 1 враг (Босс считается как 1)
@@ -237,9 +244,18 @@ public class GameScreen implements Screen {
      * Вызывается когда волна завершена. Фаза 8: обновляет логику для волны 10 (Boss).
      */
     private void onWaveCleared() {
-        System.out.println("Wave cleared! Showing upgrade screen...");
+        System.out.println("Wave cleared! Current wave: " + GameManager.getInstance().getCurrentWave());
         int nextWave = GameManager.getInstance().getCurrentWave() + 1;
         GameManager.getInstance().setCurrentWave(nextWave);
+        
+        // Фаза 8: волна 10 (босс) не показывает UpgradeScreen - переходим на VICTORY
+        if (nextWave == 11) {
+            System.out.println("GAME WON! Transitioning to Victory Screen...");
+            // Victory экран уже установлен в подписчике на BOSS_DIED в show()
+            // Здесь мы просто логируем
+            return;
+        }
+        
         if (nextWave <= 9) {
             // Фаза 7: создаём новый UpgradeScreen с текущим игроком
             UpgradeScreen upgradeScreen = new UpgradeScreen(gsm, player);
@@ -247,7 +263,7 @@ public class GameScreen implements Screen {
             gsm.push(GameStateManager.State.UPGRADE);
         } else if (nextWave == 10) {
             // Фаза 8: волна 10 - босс
-            System.out.println("WAVE 10 — BOSS WAVE!");
+            System.out.println("WAVE 10 — BOSS WAVE! Spawning boss...");
             spawnWave(10);
         }
     }
@@ -286,11 +302,12 @@ public class GameScreen implements Screen {
                     System.out.println("Hit BOSS! HP: " + boss.hp);
                 }
             }
-        } else {
-            // Обновляем обычных врагов
-            Iterator<Enemy> it = enemies.iterator();
-            while (it.hasNext()) {
-                Enemy e = it.next();
+        } else if (!enemiesListModified) {
+            // Обновляем обычных врагов - создаём копию листа для безопасного итерирования
+            List<Enemy> enemiesCopy = new ArrayList<>(enemies);
+            for (Enemy e : enemiesCopy) {
+                if (!e.isAlive()) continue;  // Пропускаем мёртвых в копии
+                
                 e.update(delta, player.x + 24, player.y + 32);  // Центр игрока
                 
                 // Урон игроку при контакте
@@ -316,18 +333,25 @@ public class GameScreen implements Screen {
                     }
                 }
                 
-                // Удалить мёртвых врагов (Фаза 6: публикуем событие и добавляем счёт)
+                // Отмечаем мёртвых врагов но НЕ удаляем в итератор
                 if (!e.isAlive()) {
                     GameManager.getInstance().addScore(e.scoreReward);
                     EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED));
-                    it.remove();
                 }
             }
             
-            // Проверяем завершение волны (все враги мертвы)
-            if (enemies.isEmpty()) {
-                EventBus.getInstance().post(new GameEvent(GameEvent.Type.WAVE_CLEARED));
+            // Удаляем мёртвых врагов ПОСЛЕ итерирования
+            if (enemies.removeIf(e -> !e.isAlive())) {
+                enemiesListModified = true;
             }
+            
+            // Отмечаем что волна очищена если все враги мертвы
+            if (enemies.isEmpty() && !waveCleared) {
+                waveCleared = true;
+            }
+            
+            // Сбрасываем флаг модификации для следующего кадра
+            enemiesListModified = false;
         }
         
         // Рисуем врагов (если не волна босса)
@@ -398,6 +422,22 @@ public class GameScreen implements Screen {
             batch.end();
         }
         
+        // Проверяем завершение волны (все враги мертвы или босс мёртв) - ПОСЛЕ всех batch.end()
+        // Отложенная обработка - флаг устанавливается в update, обрабатывается здесь после render завершён
+        
+        // Фаза 8: проверяем смерть Босса для волны 10
+        if (bossWave && boss != null && !boss.alive && !waveCleared) {
+            waveCleared = true;
+            System.out.println("Boss is dead! Wave 10 will be marked as cleared!");
+        }
+        
+        if (waveCleared) {
+            waveCleared = false;
+            // Полностью очищаем врагов перед сменой экрана
+            enemies.clear();
+            EventBus.getInstance().post(new GameEvent(GameEvent.Type.WAVE_CLEARED));
+        }
+        
         // Обработка клавиш
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             gsm.set(GameStateManager.State.GAME_OVER);
@@ -414,6 +454,12 @@ public class GameScreen implements Screen {
 
     @Override
     public void resume() {
+        // Пересоздаём batch в случае если он был disposed при hide()
+        batch = new SpriteBatch();
+        font = new BitmapFont();
+        font.setColor(Color.WHITE);
+        shapeRenderer = new ShapeRenderer();
+        
         // Спавним следующую волну после UpgradeScreen (Фаза 7-8)
         spawnWave(GameManager.getInstance().getCurrentWave());
     }
@@ -422,7 +468,11 @@ public class GameScreen implements Screen {
     public void hide() {
         // Очищаем все подписчики перед переходом на другой экран
         EventBus.getInstance().clear();
-        dispose();
+        // Закончим любые открытые batches
+        if (batch != null && batch.isDrawing()) {
+            batch.end();
+        }
+        // Не удаляем ресурсы - пусть dispose() сделает это при полном завершении
     }
 
     @Override
