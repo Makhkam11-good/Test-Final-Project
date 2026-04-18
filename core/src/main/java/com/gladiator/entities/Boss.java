@@ -196,6 +196,8 @@ public class Boss extends Enemy {
         System.out.println("Boss HP: " + hp + "/" + maxHp);
         if (hp <= 0) {
             alive = false;
+            // PHASE 11: Добавляем очки за убийство босса
+            com.gladiator.managers.GameManager.getInstance().addScore(scoreReward);
             // Публикуем ENEMY_DIED чтобы LevelManager узнал об окончании волны
             EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED));
             // Публикуем BOSS_DIED для перехода на VictoryScreen

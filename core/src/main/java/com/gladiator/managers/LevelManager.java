@@ -6,14 +6,13 @@ import com.gladiator.events.GameEvent;
 /**
  * LevelManager - управляет волнами врагов и отслеживает их уничтожение.
  * Паттерн: Observer (слушает ENEMY_DIED события).
+ * PHASE 11: Синхронизация с GameManager для правильного отсчета волн
  */
 public class LevelManager {
     private int enemiesAlive;
-    private int currentWave;
     
     public LevelManager() {
         this.enemiesAlive = 0;
-        this.currentWave = 0;
         
         // Подписываемся на событие смерти врага
         EventBus.getInstance().subscribe(
@@ -24,10 +23,11 @@ public class LevelManager {
     
     /**
      * Начать новую волну с указанным количеством врагов.
+     * PHASE 11: Используем GameManager для номера волны, не ведем свой счетчик
      */
     public void startWave(int enemyCount) {
-        currentWave++;
         enemiesAlive = enemyCount;
+        int currentWave = GameManager.getInstance().getCurrentWave();
         System.out.println("Wave " + currentWave + " started, enemies: " + enemyCount);
     }
     
@@ -50,12 +50,5 @@ public class LevelManager {
      */
     public int getEnemiesAlive() {
         return enemiesAlive;
-    }
-    
-    /**
-     * Получить номер текущей волны.
-     */
-    public int getCurrentWave() {
-        return currentWave;
     }
 }

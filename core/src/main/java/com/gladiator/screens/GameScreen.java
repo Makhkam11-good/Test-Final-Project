@@ -238,32 +238,36 @@ public class GameScreen implements Screen {
     }
     
     /**
-     * Спавнит врага на случайном краю экрана.
+     * Спавнит врага на случайной позиции внутри экрана (не на краях).
+     * PHASE 11: Враги спавнятся видимыми для игрока
      */
     private Enemy spawnAtRandomEdge(EnemyFactory factory) {
-        int edge = MathUtils.random(3);  // 0=верх, 1=низ, 2=лево, 3=право
+        // PHASE 11: Спавним врагов не на краях, а в случайных местах ВНУТРи экрана
+        // подальше от центра где находится игрок
         float x, y;
         
-        switch (edge) {
-            case 0:  // Верх
-                x = MathUtils.random(0, 800);
-                y = 480;
+        // Случайная позиция в пределах экрана
+        int quadrant = MathUtils.random(3);  // 0-3 = 4 квадранта
+        switch (quadrant) {
+            case 0:  // Верхний левый
+                x = MathUtils.random(50, 250);
+                y = MathUtils.random(250, 450);
                 break;
-            case 1:  // Низ
-                x = MathUtils.random(0, 800);
-                y = -40;
+            case 1:  // Верхний правый
+                x = MathUtils.random(550, 750);
+                y = MathUtils.random(250, 450);
                 break;
-            case 2:  // Лево
-                x = -40;
-                y = MathUtils.random(0, 480);
+            case 2:  // Нижний левый
+                x = MathUtils.random(50, 250);
+                y = MathUtils.random(30, 200);
                 break;
-            case 3:  // Право
-                x = 840;
-                y = MathUtils.random(0, 480);
+            case 3:  // Нижний правый
+                x = MathUtils.random(550, 750);
+                y = MathUtils.random(30, 200);
                 break;
             default:
-                x = 0;
-                y = 0;
+                x = 400;
+                y = 240;
         }
         
         return factory.create(x, y);
@@ -377,11 +381,8 @@ public class GameScreen implements Screen {
                     }
                 }
                 
-                // Отмечаем мёртвых врагов но НЕ удаляем в итератор
-                if (!e.isAlive()) {
-                    GameManager.getInstance().addScore(e.scoreReward);
-                    EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED));
-                }
+                // PHASE 11: Событие ENEMY_DIED уже публикуется в Enemy.takeDamage()
+                // Не публикуем дублированное событие здесь
             }
             
             // Удаляем мёртвых врагов ПОСЛЕ итерирования

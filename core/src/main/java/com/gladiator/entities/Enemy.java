@@ -64,6 +64,7 @@ public class Enemy {
     
     /**
      * Обновляет позицию врага, направляя его к игроку.
+     * PHASE 11: Враги не удаляются за экран, они остаются в игре пока не убиты.
      */
     public void update(float delta, float playerX, float playerY) {
         if (!alive) {
@@ -90,6 +91,9 @@ public class Enemy {
         
         // Обновляем bounds
         bounds.set(x, y, WIDTH, HEIGHT);
+        
+        // PHASE 11: Враг НЕ удаляется если ушел за экран
+        // Враг остается в игре пока не убит вручную игроком
     }
     
     /**
@@ -135,6 +139,7 @@ public class Enemy {
     
     /**
      * Получает урон.
+     * PHASE 11: Добавление очков при смерти врага
      */
     public void takeDamage(float amount) {
         hp -= amount;
@@ -142,6 +147,9 @@ public class Enemy {
         if (hp <= 0 && alive) {
             alive = false;
             System.out.println("Enemy died! Score: " + scoreReward);
+            
+            // Добавляем очки когда враг умирает
+            com.gladiator.managers.GameManager.getInstance().addScore(scoreReward);
             
             // Публикуем событие смерти врага
             EventBus.getInstance().post(
