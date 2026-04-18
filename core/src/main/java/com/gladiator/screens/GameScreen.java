@@ -157,70 +157,71 @@ public class GameScreen implements Screen {
         List<EnemyFactory> waveFactories = new ArrayList<>();
         
         // Определяем состав врагов для каждой волны (GDD раздел 4)
+        // PHASE 10: Увеличены количества врагов для сложности
         switch (wave) {
             case 1:
-                // 4 Слизи
-                for (int i = 0; i < 4; i++) {
+                // 6 Слизей (было 4)
+                for (int i = 0; i < 6; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
                 break;
             case 2:
-                // 6 Слизей
-                for (int i = 0; i < 6; i++) {
+                // 9 Слизей (было 6)
+                for (int i = 0; i < 9; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
                 break;
             case 3:
-                // 4 Слизи + 2 Гоблина
-                for (int i = 0; i < 4; i++) {
+                // 6 Слизей + 3 Гоблина (было 4+2)
+                for (int i = 0; i < 6; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
-                for (int i = 0; i < 2; i++) {
+                for (int i = 0; i < 3; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
                 break;
             case 4:
-                // 5 Гоблинов + 3 Слизи
-                for (int i = 0; i < 5; i++) {
+                // 8 Гоблинов + 5 Слизей (было 5+3)
+                for (int i = 0; i < 8; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 5; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
                 break;
             case 5:
-                // 8 Гоблинов
-                for (int i = 0; i < 8; i++) {
+                // 12 Гоблинов (было 8)
+                for (int i = 0; i < 12; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
                 break;
             case 6:
-                // 6 Гоблинов + 4 Слизи (Фаза 6)
-                for (int i = 0; i < 6; i++) {
+                // 9 Гоблинов + 6 Слизей (было 6+4)
+                for (int i = 0; i < 9; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < 6; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
                 break;
             case 7:
-                // 10 Гоблинов (Фаза 6)
-                for (int i = 0; i < 10; i++) {
+                // 15 Гоблинов (было 10)
+                for (int i = 0; i < 15; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
                 break;
             case 8:
-                // 8 Гоблинов + 5 Слизей (Фаза 6)
-                for (int i = 0; i < 8; i++) {
+                // 12 Гоблинов + 8 Слизей (было 8+5)
+                for (int i = 0; i < 12; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
-                for (int i = 0; i < 5; i++) {
+                for (int i = 0; i < 8; i++) {
                     waveFactories.add(new SlimeFactory());
                 }
                 break;
             case 9:
-                // 12 Гоблинов (Фаза 6)
-                for (int i = 0; i < 12; i++) {
+                // 18 Гоблинов (было 12)
+                for (int i = 0; i < 18; i++) {
                     waveFactories.add(new GoblinFactory());
                 }
                 break;
