@@ -64,8 +64,11 @@ public class GameScreen implements Screen {
         font.setColor(Color.WHITE);
         shapeRenderer = new ShapeRenderer();  // Фаза 8: для рисования Boss
         
-        // Создаём Player в центре экрана
-        player = new Player();
+        // ФАЗА 12: Если Player уже существует (вернулись из UpgradeScreen), сохраняем его
+        // Иначе создаём нового Player в центре экрана
+        if (player == null) {
+            player = new Player();
+        }
         
         // Передаём текущего игрока в GameStateManager для UpgradeScreen (Фаза 7)
         gsm.setCurrentPlayer(player);
