@@ -1,302 +1,318 @@
 package com.gladiator.entities;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input;
-import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.Animation;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
-import com.gladiator.decorator.BasePlayer;
+import com.gladiator.decorator.BasePlayerStats;
+import com.gladiator.decorator.DamageModifier;
 import com.gladiator.decorator.PlayerDecorator;
 import com.gladiator.decorator.PlayerStats;
 import com.gladiator.entities.states.AttackState;
 import com.gladiator.entities.states.DeadState;
 import com.gladiator.entities.states.IdleState;
 import com.gladiator.entities.states.PlayerState;
+import com.gladiator.entities.states.RunState;
 import com.gladiator.events.EventBus;
 import com.gladiator.events.GameEvent;
 import com.gladiator.managers.AssetManager;
+import com.gladiator.managers.GameManager;
 
-/**
- * Player (Рыцарь) - главный персонаж, управляется игроком через WASD.
- * Фаза 3: полная реализация с движением, автоатакой и паттерном State.
- * Фаза 9: анимация спрайтов
- */
-public class Player {
-    // Константы
-    private static final float SPEED = 150f;              // px/сек
-    private static final float ATTACK_COOLDOWN = 1.0f;    // сек
-    private static final float ATTACK_RADIUS = 80f;       // px
-    private static final float WIDTH = 48f;
-    private static final float HEIGHT = 64f;
-    private static final int BASE_DAMAGE = 10;
-    
-    // Поля - позиция и скорость
-    public float x, y;
-    public float velocityX, velocityY;
-    
-    // Поля - здоровье и атака
-    public float hp;
-    public float attackTimer;
-    public boolean alive;
-    
-    // Поля - состояние и коллизии
-    public Rectangle bounds;
+public class Player implements Renderable, Updatable {
+    public static final float WIDTH = 48f;
+    public static final float HEIGHT = 64f;
+    public static final float ATTACK_RADIUS = 80f;
+    private static final float ATTACK_DURATION = 0.3f;
+
+    private float x;
+    private float y;
+    private float velocityX;
+    private float velocityY;
+    private float moveDirX;
+    private float moveDirY;
+
+    private float hp;
+    private boolean alive;
+    private boolean attacking;
+    private boolean attackTriggered;
+    private float attackCooldownTimer;
+    private boolean attackReady;
+    private float damageTakenMultiplier;
+    private float stateTime;
+    private float damageFlashTimer;
+    private float facingX;
+    private float facingY;
+
+    private final Rectangle bounds;
     private PlayerState currentState;
-    
-    // Поле - характеристики Рыцаря (Decorator паттерн)
+    private final IdleState idleState;
+    private final RunState runState;
+    private final AttackState attackState;
+    private final DeadState deadState;
+
     private PlayerStats stats;
-    
-    // Поле - для анимации (Фаза 9)
-    private float stateTime = 0f;
-    
-    // Ресурс для рисования белого пикселя (fallback если спрайт не найден)
-    private static Texture whitePixel;
-    
+
     public Player() {
-        this.x = 400 - WIDTH / 2;      // центр по X (800/2 - 24)
-        this.y = 240 - HEIGHT / 2;     // центр по Y (480/2 - 32)
-        this.velocityX = 0;
-        this.velocityY = 0;
-        this.stats = new BasePlayer();  // Базовые характеристики
-        this.hp = stats.getMaxHp();
-        this.attackTimer = stats.getAttackCooldown();
-        this.alive = true;
-        this.bounds = new Rectangle(x, y, WIDTH, HEIGHT);
-        this.currentState = new IdleState(this);
-        this.currentState.enter();
-        
-        // Создаём белый пиксель для рисования, если его нет
-        if (whitePixel == null) {
-            createWhitePixel();
-        }
-    }
-    
-    private static void createWhitePixel() {
-        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        pixmap.setColor(1, 1, 1, 1);
-        pixmap.fill();
-        whitePixel = new Texture(pixmap);
-        pixmap.dispose();
+        x = 400f - WIDTH / 2f;
+        y = 240f - HEIGHT / 2f;
+        moveDirX = 0f;
+        moveDirY = 0f;
+        stats = new BasePlayerStats();
+        hp = stats.getMaxHp();
+        alive = true;
+        attacking = false;
+        attackTriggered = false;
+        attackCooldownTimer = stats.getAttackCooldown();
+        attackReady = false;
+        damageTakenMultiplier = 1f;
+        stateTime = 0f;
+        damageFlashTimer = 0f;
+        facingX = 1f;
+        facingY = 0f;
+        bounds = new Rectangle(x, y, WIDTH, HEIGHT);
+        idleState = new IdleState(this);
+        runState = new RunState(this);
+        attackState = new AttackState(this);
+        deadState = new DeadState(this);
+        currentState = idleState;
+        currentState.enter();
     }
 
-    /**
-     * Основной цикл обновления Player.
-     * Читает WASD, обновляет позицию, таймер атаки и состояние.
-     */
+    @Override
     public void update(float delta) {
         if (!alive) {
-            changeState(new DeadState(this));
+            changeState(deadState);
             return;
         }
-        
-        // Обновляем время для анимации
+
         stateTime += delta;
-        
-        // Читаем WASD и обновляем velocityX/Y
-        velocityX = 0;
-        velocityY = 0;
-        float playerSpeed = stats.getSpeed();  // Берём скорость из stats
-        
-        if (Gdx.input.isKeyPressed(Input.Keys.W)) {
-            velocityY = playerSpeed;
+        damageFlashTimer = Math.max(0f, damageFlashTimer - delta);
+        attackCooldownTimer -= delta;
+        if (attackCooldownTimer <= 0f) {
+            attackCooldownTimer = stats.getAttackCooldown();
+            attackReady = true;
         }
-        if (Gdx.input.isKeyPressed(Input.Keys.S)) {
-            velocityY = -playerSpeed;
+
+        float speed = stats.getSpeed();
+        velocityX = moveDirX * speed;
+        velocityY = moveDirY * speed;
+
+        if (moveDirX != 0f || moveDirY != 0f) {
+            facingX = moveDirX;
+            facingY = moveDirY;
         }
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) {
-            velocityX = playerSpeed;
-        }
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) {
-            velocityX = -playerSpeed;
-        }
-        
-        // Нормализуем диагональное движение
-        float length = (float) Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-        if (length > 0) {
-            velocityX = (velocityX / length) * playerSpeed;
-            velocityY = (velocityY / length) * playerSpeed;
-        }
-        
-        // Применяем скорость к позиции
+
         x += velocityX * delta;
         y += velocityY * delta;
-        
-        // Ограничиваем позицию в пределах экрана (800×480)
-        x = MathUtils.clamp(x, 0, 800 - WIDTH);
-        y = MathUtils.clamp(y, 0, 480 - HEIGHT);
-        
-        // Обновляем bounds
+
+        x = MathUtils.clamp(x, 0f, 800f - WIDTH);
+        y = MathUtils.clamp(y, 0f, 480f - HEIGHT);
         bounds.set(x, y, WIDTH, HEIGHT);
-        
-        // Обновляем таймер атаки
-        attackTimer -= delta;
-        if (attackTimer <= 0) {
-            attackTimer = stats.getAttackCooldown();  // Берём кулдаун из stats
-            performAttack();
-            changeState(new AttackState(this));
-        }
-        
-        // Обновляем текущее состояние
+
         if (currentState != null) {
             currentState.update(delta);
         }
     }
 
-    /**
-     * Рисует Player с анимацией спрайтов (Фаза 9).
-     * Fallback: если спрайт не найден, рисует белый прямоугольник как раньше.
-     */
+    @Override
     public void render(SpriteBatch batch) {
-        // Выбираем анимацию по текущему состоянию
-        String animKey = "player_idle";  // по умолчанию
-        if (currentState instanceof IdleState) {
-            animKey = "player_idle";
-        } else if (currentState instanceof com.gladiator.entities.states.RunState) {
-            animKey = "player_run";
-        } else if (currentState instanceof AttackState) {
-            animKey = "player_attack";
-        } else if (currentState instanceof DeadState) {
-            animKey = "player_dead";
-        }
-        
-        // Получаем анимацию
-        Animation<TextureRegion> animation = AssetManager.getInstance().getAnimation(animKey);
-        
-        if (animation != null) {
-            // Получаем текущий кадр анимации
-            TextureRegion frame = animation.getKeyFrame(stateTime, true);
-            
-            // Проверяем что кадр не null
-            if (frame != null) {
-                // Флипируем по горизонтали если идём влево
-                if (velocityX < 0 && !frame.isFlipX()) {
-                    frame.flip(true, false);
-                } else if (velocityX > 0 && frame.isFlipX()) {
-                    frame.flip(true, false);
-                }
-                
-                // Рисуем спрайт с стандартным размером игрока
-                batch.draw(frame, x, y, WIDTH, HEIGHT);
-            } else {
-                // Fallback если кадр null - рисуем белый квадрат
-                if (whitePixel != null) {
-                    batch.setColor(1, 1, 1, 1);
-                    batch.draw(whitePixel, x, y, WIDTH, HEIGHT);
-                    batch.setColor(1, 1, 1, 1);
-                }
-            }
+        String animationKey = AssetManager.ANIM_PLAYER_IDLE;
+        float width = WIDTH;
+        float height = HEIGHT;
+        float drawX = x;
+        float drawY = y;
+        float frameDuration = 0.12f;
+
+        if (!alive) {
+            animationKey = AssetManager.ANIM_PLAYER_DEAD;
+            width = 64f;
+            height = 40f;
+            drawX = x - 8f;
+            drawY = y + 8f;
+        } else if (attacking) {
+            animationKey = AssetManager.ANIM_PLAYER_ATTACK;
+            width = 64f;
+            height = 64f;
+            drawX = x - 8f;
+            frameDuration = 0.07f;
+        } else if (isMoving()) {
+            animationKey = AssetManager.ANIM_PLAYER_RUN;
+            frameDuration = 0.08f;
+            drawY += MathUtils.sin(stateTime * 18f) * 1.6f;
         } else {
-            // Fallback: если спрайт не найден, рисуем белый прямоугольник как раньше
-            if (whitePixel != null) {
-                batch.setColor(1, 1, 1, 1);
-                batch.draw(whitePixel, x, y, WIDTH, HEIGHT);
-                batch.setColor(1, 1, 1, 1);
-            }
+            drawY += MathUtils.sin(stateTime * 5f) * 0.7f;
         }
+
+        TextureRegion frame = AssetManager.getInstance().getAnimationFrame(animationKey, stateTime, frameDuration);
+        Texture pixel = AssetManager.getInstance().getPixel();
+        if (damageFlashTimer > 0f) {
+            batch.setColor(1f, 0.45f, 0.35f, 1f);
+        }
+        if (frame != null) {
+            float scaleX = facingX < -0.05f ? -1f : 1f;
+            float renderX = scaleX < 0f ? drawX + width : drawX;
+            batch.draw(frame, renderX, drawY, width / 2f, height / 2f, width, height, scaleX, 1f, 0f);
+        } else if (pixel != null) {
+            batch.draw(pixel, x, y, WIDTH, HEIGHT);
+        }
+        batch.setColor(1f, 1f, 1f, 1f);
     }
 
-    /**
-     * Получает урон и проверяет смерть.
-     * Применяет снижение урона от ArmorDecorator.
-     */
-    public void takeDamage(float amount) {
-        // Применяем снижение урона (DamageReduction от ArmorDecorator)
-        float reduction = stats.getDamageReduction();
-        float actualDamage = amount * (1f - reduction);
+    public void takeDamage(float amount, String cause) {
+        if (!alive) {
+            return;
+        }
+        float actualDamage = amount * damageTakenMultiplier;
         hp -= actualDamage;
-        
-        // Публикуем событие урона
-        EventBus.getInstance().post(
-            new GameEvent(GameEvent.Type.PLAYER_HURT, actualDamage)
-        );
-        
-        if (hp <= 0) {
-            hp = 0;
+        damageFlashTimer = 0.16f;
+        EventBus.getInstance().post(new GameEvent(GameEvent.Type.PLAYER_HURT, actualDamage));
+        if (hp <= 0f) {
+            hp = 0f;
             alive = false;
-            
-            // Публикуем событие смерти
-            EventBus.getInstance().post(
-                new GameEvent(GameEvent.Type.PLAYER_DIED)
-            );
+            GameManager.getInstance().setLastDeathCause(cause);
+            EventBus.getInstance().post(new GameEvent(GameEvent.Type.PLAYER_DIED));
         }
     }
 
-    /**
-     * Выполняет автоатаку (пока просто лог).
-     */
     public void performAttack() {
-        System.out.println("Player attacks!");
+        attackTriggered = true;
+        changeState(attackState);
+        EventBus.getInstance().post(new GameEvent(GameEvent.Type.PLAYER_ATTACK));
     }
 
-    /**
-     * Проверяет, жив ли игрок.
-     */
+    public boolean consumeAttackTriggered() {
+        if (attackTriggered) {
+            attackTriggered = false;
+            return true;
+        }
+        return false;
+    }
+
+    public boolean consumeAttackReady() {
+        if (attackReady) {
+            attackReady = false;
+            return true;
+        }
+        return false;
+    }
+
+
     public boolean isAlive() {
         return alive;
     }
 
-    /**
-     * Проверяет, атакует ли игрок (находится в AttackState).
-     */
     public boolean isAttacking() {
-        return currentState instanceof AttackState;
+        return attacking;
     }
 
-    /**
-     * Переключает состояние Player.
-     * Сбрасывает stateTime для новой анимации.
-     */
     public void changeState(PlayerState newState) {
         if (currentState != null) {
             currentState.exit();
         }
         currentState = newState;
-        stateTime = 0f;  // Сбрасываем время анимации
         if (currentState != null) {
             currentState.enter();
         }
     }
 
-    /**
-     * Применяет апгрейд (Decorator) к характеристикам игрока.
-     * Фаза 7: Decorator паттерн.
-     */
     public void applyUpgrade(PlayerDecorator decorator) {
         int oldMaxHp = stats.getMaxHp();
-        this.stats = decorator;  // Оборачиваем новым декоратором
-        
-        // Если новый maxHp больше старого — добавляем разницу к текущему HP
+        stats = decorator;
         int newMaxHp = stats.getMaxHp();
         if (newMaxHp > oldMaxHp) {
             hp += (newMaxHp - oldMaxHp);
         }
-        
-        // Логируем применённый апгрейд и новые характеристики
-        System.out.println("Upgrade applied: " + stats.getDescription());
-        System.out.println("Stats -> HP:" + stats.getMaxHp() +
-                           " DMG:" + stats.getDamage() +
-                           " SPD:" + stats.getSpeed() +
-                           " CD:" + stats.getAttackCooldown());
+        if (decorator instanceof DamageModifier) {
+            damageTakenMultiplier *= ((DamageModifier) decorator).getDamageMultiplier();
+        }
+        attackCooldownTimer = Math.min(attackCooldownTimer, stats.getAttackCooldown());
+        GameManager.getInstance().addUpgrade();
+        EventBus.getInstance().post(new GameEvent(GameEvent.Type.UPGRADE_SELECTED, decorator.getLabel()));
     }
 
-    /**
-     * Возвращает объект с характеристиками игрока.
-     */
     public PlayerStats getStats() {
         return stats;
     }
-    
-    /**
-     * Очищает ресурсы.
-     */
-    public static void dispose() {
-        if (whitePixel != null) {
-            whitePixel.dispose();
-            whitePixel = null;
+
+    public Rectangle getBounds() {
+        return bounds;
+    }
+
+    public float getX() {
+        return x;
+    }
+
+    public float getY() {
+        return y;
+    }
+
+    public float getCenterX() {
+        return x + WIDTH / 2f;
+    }
+
+    public float getCenterY() {
+        return y + HEIGHT / 2f;
+    }
+
+    public float getHp() {
+        return hp;
+    }
+
+    public void setMoveDirection(float x, float y) {
+        moveDirX = x;
+        moveDirY = y;
+    }
+
+    public float getMoveDirX() {
+        return moveDirX;
+    }
+
+    public float getMoveDirY() {
+        return moveDirY;
+    }
+
+    public float getFacingX() {
+        return facingX;
+    }
+
+    public float getFacingY() {
+        return facingY;
+    }
+
+    public boolean isMoving() {
+        return moveDirX != 0f || moveDirY != 0f;
+    }
+
+    public float getAttackCooldownProgress() {
+        float cooldown = stats.getAttackCooldown();
+        if (cooldown <= 0f) {
+            return 1f;
         }
+        return 1f - MathUtils.clamp(attackCooldownTimer / cooldown, 0f, 1f);
+    }
+
+    public float getAttackDuration() {
+        return ATTACK_DURATION;
+    }
+
+    public void setAttacking(boolean attacking) {
+        this.attacking = attacking;
+    }
+
+    public IdleState getIdleState() {
+        return idleState;
+    }
+
+    public RunState getRunState() {
+        return runState;
+    }
+
+    public AttackState getAttackState() {
+        return attackState;
+    }
+
+    public DeadState getDeadState() {
+        return deadState;
     }
 }

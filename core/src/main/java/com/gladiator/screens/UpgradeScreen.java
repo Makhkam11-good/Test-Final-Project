@@ -1,17 +1,17 @@
 package com.gladiator.screens;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.gladiator.decorator.ArmorDecorator;
 import com.gladiator.decorator.AttackSpeedDecorator;
@@ -24,108 +24,154 @@ import com.gladiator.entities.Player;
 import com.gladiator.managers.GameManager;
 import com.gladiator.managers.GameStateManager;
 
-/**
- * UpgradeScreen - экран выбора апгрейда после каждой волны (показывает 3 карточки).
- * Фаза 7: полная реализация с Decorator паттерном.
- */
 public class UpgradeScreen implements Screen {
-    
-    private GameStateManager gsm;
-    private Player player;
-    private BitmapFont font;
-    private SpriteBatch batch;
-    private ShapeRenderer shapeRenderer;
-    private List<PlayerDecorator> options;  // 3 случайных апгрейда
+    private static final int OPTION_COUNT = 3;
+
+    private final GameStateManager gsm;
+    private final Player player;
+    private final SpriteBatch batch;
+    private final BitmapFont font;
+    private final ShapeRenderer shapeRenderer;
+    private final OrthographicCamera camera;
+    private final Vector3 touch = new Vector3();
+    private final Rectangle[] cardBounds = new Rectangle[OPTION_COUNT];
+    private final PlayerDecorator[] options = new PlayerDecorator[OPTION_COUNT];
+    private final StringBuilder waveBuilder = new StringBuilder(32);
+    private float time;
 
     public UpgradeScreen(GameStateManager gsm, Player player) {
         this.gsm = gsm;
         this.player = player;
-    }
-
-    @Override
-    public void show() {
         batch = new SpriteBatch();
         font = new BitmapFont();
         font.setColor(Color.WHITE);
         shapeRenderer = new ShapeRenderer();
-        
-        // Создаём список всех 6 возможных декораторов
-        List<PlayerDecorator> allUpgrades = new ArrayList<>();
-        allUpgrades.add(new FireWeaponDecorator(player.getStats()));
-        allUpgrades.add(new PoisonDecorator(player.getStats()));
-        allUpgrades.add(new ShieldDecorator(player.getStats()));
-        allUpgrades.add(new ArmorDecorator(player.getStats()));
-        allUpgrades.add(new SpeedBootsDecorator(player.getStats()));
-        allUpgrades.add(new AttackSpeedDecorator(player.getStats()));
-        
-        // Перемешиваем и берём первые 3
-        Collections.shuffle(allUpgrades);
-        options = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            options.add(allUpgrades.get(i));
+        camera = new OrthographicCamera();
+        camera.setToOrtho(false, 800, 480);
+
+        cardBounds[0] = new Rectangle(60, 150, 200, 160);
+        cardBounds[1] = new Rectangle(300, 150, 200, 160);
+        cardBounds[2] = new Rectangle(540, 150, 200, 160);
+
+        buildOptions();
+    }
+
+    @Override
+    public void show() {
+    }
+
+    private void buildOptions() {
+        int[] pool = {0, 1, 2, 3, 4, 5};
+        for (int i = pool.length - 1; i > 0; i--) {
+            int j = MathUtils.random(i);
+            int temp = pool[i];
+            pool[i] = pool[j];
+            pool[j] = temp;
+        }
+
+        for (int i = 0; i < OPTION_COUNT; i++) {
+            options[i] = createDecorator(pool[i]);
+        }
+    }
+
+    private PlayerDecorator createDecorator(int index) {
+        switch (index) {
+            case 0:
+                return new FireWeaponDecorator(player.getStats());
+            case 1:
+                return new PoisonDecorator(player.getStats());
+            case 2:
+                return new ShieldDecorator(player.getStats());
+            case 3:
+                return new ArmorDecorator(player.getStats());
+            case 4:
+                return new SpeedBootsDecorator(player.getStats());
+            case 5:
+            default:
+                return new AttackSpeedDecorator(player.getStats());
         }
     }
 
     @Override
     public void render(float delta) {
-        // Очищаем экран тёмно-фиолетовым цветом
-        ScreenUtils.clear(0.1f, 0.0f, 0.15f, 1);
-        
-        // Рисуем заголовок
+        time += delta;
+        ScreenUtils.clear(0.045f, 0.025f, 0.04f, 1);
+
+        camera.update();
+        batch.setProjectionMatrix(camera.combined);
+        shapeRenderer.setProjectionMatrix(camera.combined);
+
+        touch.set(Gdx.input.getX(), Gdx.input.getY(), 0f);
+        camera.unproject(touch);
+
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(0.11f, 0.08f, 0.055f, 1f);
+        shapeRenderer.rect(0f, 0f, 800f, 480f);
+        shapeRenderer.setColor(0.42f, 0.12f, 0.08f, 0.28f);
+        shapeRenderer.circle(400f, 240f, 190f + MathUtils.sin(time * 1.6f) * 6f);
+        shapeRenderer.setColor(0.9f, 0.6f, 0.22f, 0.12f);
+        shapeRenderer.circle(400f, 240f, 82f);
+        shapeRenderer.end();
+
         batch.begin();
+        font.getData().setScale(1.6f);
+        font.setColor(1f, 0.82f, 0.35f, 1f);
+        font.draw(batch, "CHOOSE YOUR SPOILS", 236, 452);
+        font.getData().setScale(1.0f);
         font.setColor(Color.WHITE);
-        font.draw(batch, "CHOOSE YOUR UPGRADE", 250, 450);
-        font.draw(batch, "Wave " + GameManager.getInstance().getCurrentWave() + " cleared!", 300, 420);
+        waveBuilder.setLength(0);
+        waveBuilder.append("Wave ").append(GameManager.getInstance().getCurrentWave() - 1).append(" cleared");
+        font.draw(batch, waveBuilder, 342, 416);
         batch.end();
-        
-        // Рисуем 3 карточки
-        shapeRenderer.begin(ShapeType.Filled);
-        shapeRenderer.setColor(0.2f, 0.2f, 0.2f, 1);  // Тёмно-серый
-        
-        // Координаты карточек
-        float[][] cardPositions = {
-            {60, 150, 200, 160},   // Карточка 1: x, y, width, height
-            {300, 150, 200, 160},  // Карточка 2
-            {540, 150, 200, 160}   // Карточка 3
-        };
-        
-        // Рисуем фоны карточек
-        for (float[] card : cardPositions) {
-            shapeRenderer.rect(card[0], card[1], card[2], card[3]);
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        for (int i = 0; i < OPTION_COUNT; i++) {
+            Rectangle card = cardBounds[i];
+            boolean hovered = card.contains(touch.x, touch.y);
+            float pulse = hovered ? 0.08f + MathUtils.sin(time * 12f) * 0.03f : 0f;
+            shapeRenderer.setColor(0.16f + pulse, 0.105f + pulse, 0.07f, 1f);
+            shapeRenderer.rect(card.x, card.y, card.width, card.height);
+            shapeRenderer.setColor(0.7f, 0.28f, 0.12f, hovered ? 0.72f : 0.36f);
+            shapeRenderer.rect(card.x, card.y + card.height - 8f, card.width, 8f);
         }
         shapeRenderer.end();
-        
-        // Рисуем рамки карточек
-        shapeRenderer.begin(ShapeType.Line);
-        shapeRenderer.setColor(Color.WHITE);
-        for (float[] card : cardPositions) {
-            shapeRenderer.rect(card[0], card[1], card[2], card[3]);
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        for (int i = 0; i < OPTION_COUNT; i++) {
+            Rectangle card = cardBounds[i];
+            shapeRenderer.setColor(card.contains(touch.x, touch.y) ? Color.GOLD : Color.LIGHT_GRAY);
+            shapeRenderer.rect(card.x, card.y, card.width, card.height);
         }
         shapeRenderer.end();
-        
-        // Рисуем текст на карточках и подсказки выбора
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+
         batch.begin();
-        font.setColor(Color.WHITE);
-        
-        for (int i = 0; i < options.size(); i++) {
-            PlayerDecorator dec = options.get(i);
-            float[] card = cardPositions[i];
-            
-            // Название апгрейда в центре карточки
-            String description = dec.getDescription();
-            float textY = card[1] + card[3] - 30;  // Верхняя часть карточки
-            font.draw(batch, description, card[0] + 10, textY);
-            
-            // Подсказка выбора внизу карточки
-            String hint = "[" + (i + 1) + "]";
-            font.draw(batch, hint, card[0] + 75, card[1] + 20);
+        for (int i = 0; i < OPTION_COUNT; i++) {
+            Rectangle card = cardBounds[i];
+            font.setColor(1f, 0.82f, 0.35f, 1f);
+            font.draw(batch, "[" + (i + 1) + "]", card.x + 10, card.y + card.height - 24);
+            font.setColor(Color.WHITE);
+            font.draw(batch, options[i].getLabel(), card.x + 42, card.y + card.height - 30);
+            font.setColor(0.78f, 0.73f, 0.64f, 1f);
+            font.draw(batch, getUpgradeDescription(options[i]), card.x + 12, card.y + 78);
+            font.setColor(1f, 0.88f, 0.48f, 1f);
+            font.draw(batch, "Click or press " + (i + 1), card.x + 46, card.y + 28);
         }
-        
-        // Подсказка внизу экрана
-        font.draw(batch, "Press 1, 2 or 3 to choose", 220, 80);
+        font.setColor(0.9f, 0.82f, 0.68f, 1f);
+        font.draw(batch, "Choose one upgrade. Effects stack for the whole run.", 226, 86);
+        font.setColor(Color.WHITE);
         batch.end();
-        
-        // Обработка ввода
+
+        if (Gdx.input.justTouched()) {
+            for (int i = 0; i < OPTION_COUNT; i++) {
+                if (cardBounds[i].contains(touch.x, touch.y)) {
+                    applyUpgrade(i);
+                    break;
+                }
+            }
+        }
         if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_1)) {
             applyUpgrade(0);
         } else if (Gdx.input.isKeyJustPressed(Input.Keys.NUM_2)) {
@@ -135,23 +181,29 @@ public class UpgradeScreen implements Screen {
         }
     }
 
-    /**
-     * Применяет выбранный апгрейд к игроку и возвращает в GameScreen.
-     * Фаза 7: Decorator паттерн.
-     */
-    private void applyUpgrade(int index) {
-        PlayerDecorator chosen = options.get(index);
-        System.out.println("Player chose: " + chosen.getDescription());
-        player.applyUpgrade(chosen);
-        
-        // Фаза 9: воспроизведи звук выбора апгрейда
-        com.badlogic.gdx.audio.Sound upgradeSound = 
-            com.gladiator.managers.AssetManager.getInstance().getSound("upgrade");
-        if (upgradeSound != null) {
-            upgradeSound.play(1.0f);
+    private String getUpgradeDescription(PlayerDecorator decorator) {
+        String label = decorator.getLabel();
+        if (label.startsWith("Fire")) {
+            return "Bigger burst damage on every slash.";
         }
-        
-        gsm.pop();  // Возвращаемся в GameScreen
+        if (label.startsWith("Poison")) {
+            return "Reliable damage scaling for long fights.";
+        }
+        if (label.startsWith("Shield")) {
+            return "More max HP and safer mistakes.";
+        }
+        if (label.startsWith("Armor")) {
+            return "Reduces incoming damage permanently.";
+        }
+        if (label.startsWith("Speed")) {
+            return "Move faster through arrows and runes.";
+        }
+        return "Slash more often; best with damage upgrades.";
+    }
+
+    private void applyUpgrade(int index) {
+        player.applyUpgrade(options[index]);
+        gsm.pop();
     }
 
     @Override
@@ -168,16 +220,12 @@ public class UpgradeScreen implements Screen {
 
     @Override
     public void hide() {
-        // Очищаем ресурсы
-        if (batch != null) batch.dispose();
-        if (font != null) font.dispose();
-        if (shapeRenderer != null) shapeRenderer.dispose();
     }
 
     @Override
     public void dispose() {
-        if (batch != null) batch.dispose();
-        if (font != null) font.dispose();
-        if (shapeRenderer != null) shapeRenderer.dispose();
+        batch.dispose();
+        font.dispose();
+        shapeRenderer.dispose();
     }
 }

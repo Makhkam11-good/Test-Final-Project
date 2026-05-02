@@ -1,497 +1,754 @@
 package com.gladiator.screens;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
-import com.badlogic.gdx.audio.Music;
-import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.gladiator.commands.AttackCommand;
+import com.gladiator.commands.CommandHistory;
+import com.gladiator.commands.KeyboardInputHandler;
+import com.gladiator.commands.PlayerInputHandler;
 import com.gladiator.entities.Boss;
 import com.gladiator.entities.Enemy;
 import com.gladiator.entities.Player;
+import com.gladiator.entities.Projectile;
 import com.gladiator.events.EventBus;
+import com.gladiator.events.EventListener;
 import com.gladiator.events.GameEvent;
+import com.gladiator.factories.ArcherFactory;
 import com.gladiator.factories.BossFactory;
+import com.gladiator.factories.BruteFactory;
 import com.gladiator.factories.EnemyFactory;
 import com.gladiator.factories.GoblinFactory;
 import com.gladiator.factories.SlimeFactory;
+import com.gladiator.managers.AssetManager;
+import com.gladiator.managers.AudioManager;
 import com.gladiator.managers.GameManager;
 import com.gladiator.managers.GameStateManager;
 import com.gladiator.managers.LevelManager;
 
-/**
- * GameScreen - основной экран игры, где происходит вся игровая логика.
- * Фаза 8: добавлена поддержка Boss волны 10.
- */
 public class GameScreen implements Screen {
-    
-    private GameStateManager gsm;
-    private SpriteBatch batch;
-    private BitmapFont font;
-    private ShapeRenderer shapeRenderer;
+    private static final float WORLD_WIDTH = 800f;
+    private static final float WORLD_HEIGHT = 480f;
+    private static final WavePlan[] WAVES = {
+        new WavePlan("Gate Trial", 5, 0, 0, 0, 0.88f, false, false),
+        new WavePlan("Slime Surge", 8, 1, 0, 0, 0.82f, false, false),
+        new WavePlan("Goblin Rush", 5, 4, 0, 0, 0.78f, false, false),
+        new WavePlan("Arrow Balcony", 4, 4, 2, 0, 0.72f, false, false),
+        new WavePlan("Burning Sigils", 6, 5, 2, 0, 0.68f, true, false),
+        new WavePlan("Iron Initiates", 4, 5, 2, 1, 0.64f, true, false),
+        new WavePlan("Twin Ambush", 7, 7, 3, 1, 0.60f, true, false),
+        new WavePlan("Moonlit Volley", 5, 7, 5, 1, 0.56f, true, false),
+        new WavePlan("Shield Breakers", 4, 8, 4, 3, 0.52f, true, false),
+        new WavePlan("Champion's Gauntlet", 8, 9, 4, 3, 0.48f, true, false),
+        new WavePlan("Last Blood Moon", 9, 10, 5, 4, 0.44f, true, false),
+        new WavePlan("Demon King's Court", 0, 0, 0, 0, 1.0f, true, true)
+    };
+
+    private final GameStateManager gsm;
+    private final SpriteBatch batch;
+    private final ShapeRenderer shapeRenderer;
+    private final BitmapFont font;
+    private final OrthographicCamera camera;
+    private final StringBuilder hudBuilder = new StringBuilder(160);
+    private final StringBuilder statsBuilder = new StringBuilder(160);
+
+    private final EnemyFactory slimeFactory = new SlimeFactory();
+    private final EnemyFactory goblinFactory = new GoblinFactory();
+    private final EnemyFactory archerFactory = new ArcherFactory();
+    private final EnemyFactory bruteFactory = new BruteFactory();
+    private final EnemyFactory bossFactory = new BossFactory();
+
+    private final CommandHistory commandHistory = new CommandHistory();
+    private PlayerInputHandler inputHandler;
+    private AttackCommand attackCommand;
+
     private Player player;
     private LevelManager levelManager;
-    
-    // Враги
-    private List<Enemy> enemies;
-    private float spawnInterval;  // Фаза 6: интервал спавна из GameManager
+    private final ArrayList<Enemy> enemies = new ArrayList<>();
+    private final ArrayList<Projectile> projectiles = new ArrayList<>();
+    private final ArrayList<Particle> particles = new ArrayList<>();
+    private final ArrayList<FloatingText> floatingTexts = new ArrayList<>();
+    private final ArrayList<HazardZone> hazards = new ArrayList<>();
+    private Boss boss;
+
+    private int pendingSlimes;
+    private int pendingGoblins;
+    private int pendingArchers;
+    private int pendingBrutes;
     private float spawnTimer;
-    private boolean waveCleared = false;  // Флаг для отложенной обработки окончания волны
-    private boolean enemiesListModified = false;  // Флаг для защиты от модификации листа
-    
-    
-    // Босс (Фаза 8)
-    private Boss boss = null;
-    private boolean bossWave = false;
-    
+    private float spawnInterval;
+    private float hazardTimer;
+    private float waveIntroTimer;
+    private float attackArcTimer;
+    private float shakeTimer;
+    private float shakePower;
+    private boolean bossWave;
+    private boolean needsWaveStart;
+
+    private final EventListener waveClearedListener;
+    private final EventListener playerDiedListener;
+    private final EventListener bossDiedListener;
+    private final EventListener enemyDiedListener;
+
     public GameScreen(GameStateManager gsm) {
         this.gsm = gsm;
+        batch = new SpriteBatch();
+        shapeRenderer = new ShapeRenderer();
+        font = new BitmapFont();
+        font.setColor(Color.WHITE);
+        camera = new OrthographicCamera();
+        camera.setToOrtho(false, WORLD_WIDTH, WORLD_HEIGHT);
+
+        waveClearedListener = event -> onWaveCleared();
+        playerDiedListener = event -> this.gsm.set(GameStateManager.State.GAME_OVER);
+        bossDiedListener = event -> this.gsm.set(GameStateManager.State.VICTORY);
+        enemyDiedListener = this::onEnemyDied;
     }
 
     @Override
     public void show() {
-        batch = new SpriteBatch();
-        font = new BitmapFont();
-        font.setColor(Color.WHITE);
-        shapeRenderer = new ShapeRenderer();  // Фаза 8: для рисования Boss
-        
-        // ФАЗА 12: Если Player уже существует (вернулись из UpgradeScreen), сохраняем его
-        // Иначе создаём нового Player в центре экрана
-        if (player == null) {
+        if (player == null || GameManager.getInstance().getCurrentWave() == 1) {
             player = new Player();
         }
-        
-        // Передаём текущего игрока в GameStateManager для UpgradeScreen (Фаза 7)
-        gsm.setCurrentPlayer(player);
-        
-        // Создаём LevelManager
+
+        commandHistory.clear();
+        inputHandler = new KeyboardInputHandler(player, commandHistory);
+        attackCommand = new AttackCommand(player);
+
         levelManager = new LevelManager();
-        
-        // Инициализируем враги (Фаза 6: используем GameManager)
-        enemies = new ArrayList<>();
-        
-        // Получаем интервал спавна из стратегии сложности (Фаза 6)
-        spawnInterval = GameManager.getInstance().getDifficulty().getSpawnInterval();
-        spawnTimer = spawnInterval;
-        
-        // Спавним первую волну
-        spawnWave(GameManager.getInstance().getCurrentWave());
-        
-        // Подписываемся на событие завершения волны
-        EventBus.getInstance().subscribe(
-            GameEvent.Type.WAVE_CLEARED,
-            event -> onWaveCleared()
-        );
-        
-        // Подписываемся на событие смерти игрока
-        EventBus.getInstance().subscribe(
-            GameEvent.Type.PLAYER_DIED,
-            event -> gsm.set(GameStateManager.State.GAME_OVER)
-        );
-        
-        // Фаза 8: подписываемся на смерть босса
-        EventBus.getInstance().subscribe(
-            GameEvent.Type.BOSS_DIED,
-            event -> {
-                System.out.println("Victory! Boss is dead!");
-                gsm.set(GameStateManager.State.VICTORY);
-            }
-        );
-        
-        // Фаза 9: подписываемся на звуки через Observer
-        EventBus.getInstance().subscribe(GameEvent.Type.ENEMY_DIED, event -> {
-            Sound sound = com.gladiator.managers.AssetManager.getInstance().getSound("enemy_death");
-            if (sound != null) sound.play(0.8f);
-        });
-        
-        EventBus.getInstance().subscribe(GameEvent.Type.PLAYER_HURT, event -> {
-            Sound sound = com.gladiator.managers.AssetManager.getInstance().getSound("hit");
-            if (sound != null) sound.play(1.0f);
-        });
-        
-        EventBus.getInstance().subscribe(GameEvent.Type.BOSS_DIED, event -> {
-            Music bgm = com.gladiator.managers.AssetManager.getInstance().getBgm();
-            if (bgm != null) {
-                bgm.stop();
-            }
-        });
+        enemies.clear();
+        projectiles.clear();
+        particles.clear();
+        floatingTexts.clear();
+        hazards.clear();
+        boss = null;
+        bossWave = false;
+        needsWaveStart = true;
+        spawnTimer = 0f;
+        hazardTimer = 0f;
+        waveIntroTimer = 0f;
+        attackArcTimer = 0f;
+        shakeTimer = 0f;
+        shakePower = 0f;
+        AudioManager.getInstance().playMusic(AudioManager.MusicMode.ARENA);
+
+        EventBus.getInstance().subscribe(GameEvent.Type.WAVE_CLEARED, waveClearedListener);
+        EventBus.getInstance().subscribe(GameEvent.Type.PLAYER_DIED, playerDiedListener);
+        EventBus.getInstance().subscribe(GameEvent.Type.BOSS_DIED, bossDiedListener);
+        EventBus.getInstance().subscribe(GameEvent.Type.ENEMY_DIED, enemyDiedListener);
     }
 
-    /**
-     * Спавнит волну врагов. Фаза 8: добавлена волна 10 с Боссом.
-     */
-    private void spawnWave(int wave) {
-        waveCleared = false;  // Сбрасываем флаг при спавне новой волны
-        enemiesListModified = false;  // Сбрасываем флаг модификации
-        
-        if (wave == 10) {
-            bossWave = true;
-            enemies.clear();
-            enemiesListModified = true;  // Отмечаем что лист был изменён
-            // Спавни Босса по центру верхнего края
-            boss = (Boss) new BossFactory().create(400 - 40, 440);
-            levelManager.startWave(1);  // 1 враг (Босс считается как 1)
-            System.out.println("WAVE 10 — BOSS APPEARS!");
-            
-            // Фаза 9: воспроизведи звук появления босса
-            Sound bossRoarSound = 
-                com.gladiator.managers.AssetManager.getInstance().getSound("boss_roar");
-            if (bossRoarSound != null) {
-                bossRoarSound.play(1.0f);
-            }
-            
+    private void startWave(int wave) {
+        WavePlan plan = getWavePlan(wave);
+        enemies.clear();
+        projectiles.clear();
+        hazards.clear();
+        boss = null;
+        bossWave = plan.bossWave;
+        waveIntroTimer = bossWave ? 3.0f : 2.1f;
+        attackArcTimer = 0f;
+
+        EventBus.getInstance().post(new GameEvent(GameEvent.Type.WAVE_STARTED, plan.name));
+        if (bossWave) {
+            boss = (Boss) bossFactory.create(360f, 350f);
+            levelManager.startWave(1);
+            AudioManager.getInstance().playMusic(AudioManager.MusicMode.BOSS);
+            AudioManager.getInstance().playBossRoar();
+            shake(0.8f, 7f);
             return;
         }
-        
-        bossWave = false;
-        boss = null;
-        
-        enemies.clear();
-        
-        List<EnemyFactory> waveFactories = new ArrayList<>();
-        
-        // Определяем состав врагов для каждой волны (GDD раздел 4)
-        // PHASE 10: Увеличены количества врагов для сложности
-        switch (wave) {
+
+        AudioManager.getInstance().playMusic(AudioManager.MusicMode.ARENA);
+        pendingSlimes = plan.slimes;
+        pendingGoblins = plan.goblins;
+        pendingArchers = plan.archers;
+        pendingBrutes = plan.brutes;
+        levelManager.startWave(plan.totalEnemies());
+        float difficultySpawnFactor = GameManager.getInstance().getDifficulty().getSpawnInterval() / 1.5f;
+        spawnInterval = plan.spawnInterval * difficultySpawnFactor;
+        spawnTimer = 0.15f;
+        hazardTimer = plan.hazards ? 2.8f : 999f;
+    }
+
+    private WavePlan getWavePlan(int wave) {
+        int index = MathUtils.clamp(wave, 1, WAVES.length) - 1;
+        return WAVES[index];
+    }
+
+    private void spawnNextEnemy() {
+        int totalPending = pendingSlimes + pendingGoblins + pendingArchers + pendingBrutes;
+        if (totalPending <= 0) {
+            return;
+        }
+
+        int pick = MathUtils.random(totalPending - 1);
+        EnemyFactory factory;
+        if (pick < pendingSlimes) {
+            pendingSlimes--;
+            factory = slimeFactory;
+        } else if (pick < pendingSlimes + pendingGoblins) {
+            pendingGoblins--;
+            factory = goblinFactory;
+        } else if (pick < pendingSlimes + pendingGoblins + pendingArchers) {
+            pendingArchers--;
+            factory = archerFactory;
+        } else {
+            pendingBrutes--;
+            factory = bruteFactory;
+        }
+
+        Enemy enemy = spawnAtEdge(factory);
+        int wave = GameManager.getInstance().getCurrentWave();
+        if (wave >= 9) {
+            enemy.setSpeed(enemy.getSpeed() * 1.12f);
+        }
+        enemies.add(enemy);
+        spawnBurst(enemy.getCenterX(), enemy.getCenterY(), 8, 0.9f, 0.55f, 0.25f);
+    }
+
+    private Enemy spawnAtEdge(EnemyFactory factory) {
+        float x;
+        float y;
+        int edge = MathUtils.random(3);
+        switch (edge) {
+            case 0:
+                x = MathUtils.random(20f, WORLD_WIDTH - 60f);
+                y = WORLD_HEIGHT - 54f;
+                break;
             case 1:
-                // 6 Слизей (было 4)
-                for (int i = 0; i < 6; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
+                x = MathUtils.random(20f, WORLD_WIDTH - 60f);
+                y = 8f;
                 break;
             case 2:
-                // 9 Слизей (было 6)
-                for (int i = 0; i < 9; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
-                break;
-            case 3:
-                // 6 Слизей + 3 Гоблина (было 4+2)
-                for (int i = 0; i < 6; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
-                for (int i = 0; i < 3; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                break;
-            case 4:
-                // 8 Гоблинов + 5 Слизей (было 5+3)
-                for (int i = 0; i < 8; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                for (int i = 0; i < 5; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
-                break;
-            case 5:
-                // 12 Гоблинов (было 8)
-                for (int i = 0; i < 12; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                break;
-            case 6:
-                // 9 Гоблинов + 6 Слизей (было 6+4)
-                for (int i = 0; i < 9; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                for (int i = 0; i < 6; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
-                break;
-            case 7:
-                // 15 Гоблинов (было 10)
-                for (int i = 0; i < 15; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                break;
-            case 8:
-                // 12 Гоблинов + 8 Слизей (было 8+5)
-                for (int i = 0; i < 12; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                for (int i = 0; i < 8; i++) {
-                    waveFactories.add(new SlimeFactory());
-                }
-                break;
-            case 9:
-                // 18 Гоблинов (было 12)
-                for (int i = 0; i < 18; i++) {
-                    waveFactories.add(new GoblinFactory());
-                }
-                break;
-        }
-        
-        // Спавним врагов на случайных краях экрана
-        for (EnemyFactory factory : waveFactories) {
-            Enemy enemy = spawnAtRandomEdge(factory);
-            enemies.add(enemy);
-        }
-        
-        levelManager.startWave(enemies.size());
-        System.out.println("Spawned " + enemies.size() + " enemies for wave " + wave);
-    }
-    
-    /**
-     * Спавнит врага на случайной позиции внутри экрана (не на краях).
-     * PHASE 11: Враги спавнятся видимыми для игрока
-     */
-    private Enemy spawnAtRandomEdge(EnemyFactory factory) {
-        // PHASE 11: Спавним врагов не на краях, а в случайных местах ВНУТРи экрана
-        // подальше от центра где находится игрок
-        float x, y;
-        
-        // Случайная позиция в пределах экрана
-        int quadrant = MathUtils.random(3);  // 0-3 = 4 квадранта
-        switch (quadrant) {
-            case 0:  // Верхний левый
-                x = MathUtils.random(50, 250);
-                y = MathUtils.random(250, 450);
-                break;
-            case 1:  // Верхний правый
-                x = MathUtils.random(550, 750);
-                y = MathUtils.random(250, 450);
-                break;
-            case 2:  // Нижний левый
-                x = MathUtils.random(50, 250);
-                y = MathUtils.random(30, 200);
-                break;
-            case 3:  // Нижний правый
-                x = MathUtils.random(550, 750);
-                y = MathUtils.random(30, 200);
+                x = 10f;
+                y = MathUtils.random(20f, WORLD_HEIGHT - 80f);
                 break;
             default:
-                x = 400;
-                y = 240;
+                x = WORLD_WIDTH - 62f;
+                y = MathUtils.random(20f, WORLD_HEIGHT - 80f);
+                break;
         }
-        
         return factory.create(x, y);
     }
 
-    /**
-     * Вызывается когда волна завершена. Фаза 8: обновляет логику для волны 10 (Boss).
-     */
     private void onWaveCleared() {
-        System.out.println("Wave cleared! Current wave: " + GameManager.getInstance().getCurrentWave());
-        int nextWave = GameManager.getInstance().getCurrentWave() + 1;
-        GameManager.getInstance().setCurrentWave(nextWave);
-        
-        // Фаза 8: волна 10 (босс) не показывает UpgradeScreen - переходим на VICTORY
-        if (nextWave == 11) {
-            System.out.println("GAME WON! Transitioning to Victory Screen...");
-            // Victory экран уже установлен в подписчике на BOSS_DIED в show()
-            // Здесь мы просто логируем
+        if (bossWave) {
             return;
         }
-        
-        if (nextWave <= 9) {
-            // Фаза 7: создаём новый UpgradeScreen с текущим игроком
+
+        int nextWave = GameManager.getInstance().getCurrentWave() + 1;
+        GameManager.getInstance().setCurrentWave(nextWave);
+
+        if (nextWave <= WAVES.length) {
+            needsWaveStart = true;
             UpgradeScreen upgradeScreen = new UpgradeScreen(gsm, player);
             gsm.registerScreen(GameStateManager.State.UPGRADE, upgradeScreen);
             gsm.push(GameStateManager.State.UPGRADE);
-        } else if (nextWave == 10) {
-            // Фаза 8: волна 10 - босс
-            System.out.println("WAVE 10 — BOSS WAVE! Spawning boss...");
-            spawnWave(10);
+        }
+    }
+
+    private void onEnemyDied(GameEvent event) {
+        Enemy enemy = event.getPayload(Enemy.class);
+        if (enemy == null) {
+            return;
+        }
+        spawnBurst(enemy.getCenterX(), enemy.getCenterY(), enemy instanceof Boss ? 42 : 18, 1f, 0.25f, 0.08f);
+        addFloatingText("+" + getDeathRewardText(enemy), enemy.getCenterX(), enemy.getCenterY() + 18f,
+            1f, 0.82f, 0.22f);
+        shake(enemy instanceof Boss ? 0.65f : 0.16f, enemy instanceof Boss ? 8f : 2.6f);
+    }
+
+    private String getDeathRewardText(Enemy enemy) {
+        if (enemy instanceof Boss) {
+            return "1000";
+        }
+        if ("Iron Brute".equals(enemy.getTypeName())) {
+            return "75";
+        }
+        if ("Arena Archer".equals(enemy.getTypeName())) {
+            return "40";
+        }
+        if ("Goblin".equals(enemy.getTypeName())) {
+            return "25";
+        }
+        return "10";
+    }
+
+    private void update(float delta) {
+        inputHandler.update(delta);
+        player.update(delta);
+        GameManager.getInstance().addTime(delta);
+
+        if (needsWaveStart) {
+            startWave(GameManager.getInstance().getCurrentWave());
+            needsWaveStart = false;
+        }
+
+        waveIntroTimer = Math.max(0f, waveIntroTimer - delta);
+        attackArcTimer = Math.max(0f, attackArcTimer - delta);
+        shakeTimer = Math.max(0f, shakeTimer - delta);
+
+        if (player.consumeAttackReady()) {
+            commandHistory.execute(attackCommand);
+        }
+        boolean attackTriggered = player.consumeAttackTriggered();
+        if (attackTriggered) {
+            attackArcTimer = 0.18f;
+            spawnSlash(player.getCenterX(), player.getCenterY());
+        }
+
+        if (bossWave) {
+            updateBoss(delta, attackTriggered);
+        } else {
+            updateEnemyWave(delta, attackTriggered);
+        }
+
+        updateProjectiles(delta);
+        updateHazards(delta);
+        updateEffects(delta);
+    }
+
+    private void updateBoss(float delta, boolean attackTriggered) {
+        WavePlan plan = getWavePlan(GameManager.getInstance().getCurrentWave());
+        if (boss != null && boss.isAlive()) {
+            boss.setTarget(player.getCenterX(), player.getCenterY());
+            boss.update(delta);
+
+            if (boss.getBounds().overlaps(player.getBounds())) {
+                if (boss.isDashing) {
+                    if (!boss.isDashHitApplied()) {
+                        player.takeDamage(40f, "Demon King Dash");
+                        boss.setDashHitApplied(true);
+                        shake(0.3f, 6f);
+                    }
+                } else {
+                    player.takeDamage(boss.getContactDamage() * delta, "Demon King");
+                }
+            }
+
+            if (attackTriggered && isInsidePlayerAttack(boss.getCenterX(), boss.getCenterY())) {
+                damageEnemy(boss, player.getStats().getDamage());
+            }
+        }
+
+        if (plan.hazards) {
+            hazardTimer -= delta;
+            if (hazardTimer <= 0f) {
+                spawnHazard(MathUtils.random(120f, 680f), MathUtils.random(90f, 390f), 54f, 24f);
+                hazardTimer = MathUtils.random(1.6f, 2.4f);
+            }
+        }
+    }
+
+    private void updateEnemyWave(float delta, boolean attackTriggered) {
+        spawnTimer -= delta;
+        if (pendingSlimes + pendingGoblins + pendingArchers + pendingBrutes > 0 && spawnTimer <= 0f) {
+            spawnNextEnemy();
+            spawnTimer = spawnInterval;
+        }
+
+        for (int i = enemies.size() - 1; i >= 0; i--) {
+            Enemy enemy = enemies.get(i);
+            if (!enemy.isAlive()) {
+                enemies.remove(i);
+                continue;
+            }
+
+            enemy.setTarget(player.getCenterX(), player.getCenterY());
+            enemy.update(delta);
+
+            if (enemy.getBounds().overlaps(player.getBounds())) {
+                player.takeDamage(enemy.getDamage() * delta, enemy.getTypeName());
+            }
+
+            if (enemy.consumeRangedAttackReady(player.getCenterX(), player.getCenterY())) {
+                projectiles.add(new Projectile(enemy.getCenterX(), enemy.getCenterY(),
+                    player.getCenterX(), player.getCenterY(), enemy.getProjectileSpeed(),
+                    enemy.getProjectileDamage(), enemy.getTypeName(), 0.95f, 0.72f, 0.25f));
+                spawnBurst(enemy.getCenterX(), enemy.getCenterY(), 4, 0.95f, 0.72f, 0.25f);
+            }
+
+            if (attackTriggered && isInsidePlayerAttack(enemy.getCenterX(), enemy.getCenterY())) {
+                damageEnemy(enemy, player.getStats().getDamage());
+            }
+        }
+
+        WavePlan plan = getWavePlan(GameManager.getInstance().getCurrentWave());
+        if (plan.hazards) {
+            hazardTimer -= delta;
+            if (hazardTimer <= 0f) {
+                float offsetX = MathUtils.random(-130f, 130f);
+                float offsetY = MathUtils.random(-90f, 90f);
+                float x = MathUtils.clamp(player.getCenterX() + offsetX, 80f, 720f);
+                float y = MathUtils.clamp(player.getCenterY() + offsetY, 70f, 410f);
+                spawnHazard(x, y, 42f, 16f);
+                hazardTimer = MathUtils.random(3.2f, 4.8f);
+            }
+        }
+    }
+
+    private boolean isInsidePlayerAttack(float x, float y) {
+        float dx = player.getCenterX() - x;
+        float dy = player.getCenterY() - y;
+        return (dx * dx + dy * dy) <= (Player.ATTACK_RADIUS * Player.ATTACK_RADIUS);
+    }
+
+    private void damageEnemy(Enemy enemy, int damage) {
+        if (!enemy.isAlive()) {
+            return;
+        }
+        enemy.takeDamage(damage);
+        addFloatingText("-" + damage, enemy.getCenterX(), enemy.getCenterY() + 20f,
+            1f, 0.9f, 0.52f);
+        spawnBurst(enemy.getCenterX(), enemy.getCenterY(), 7, 1f, 0.8f, 0.25f);
+        shake(0.09f, 1.8f);
+    }
+
+    private void updateProjectiles(float delta) {
+        for (int i = projectiles.size() - 1; i >= 0; i--) {
+            Projectile projectile = projectiles.get(i);
+            projectile.update(delta);
+            if (projectile.isAlive() && projectile.getBounds().overlaps(player.getBounds())) {
+                player.takeDamage(projectile.getDamage(), projectile.getSourceName());
+                spawnBurst(projectile.getX(), projectile.getY(), 10, 0.95f, 0.32f, 0.18f);
+                projectile.destroy();
+                shake(0.12f, 2.8f);
+            }
+            if (!projectile.isAlive()) {
+                projectiles.remove(i);
+            }
+        }
+    }
+
+    private void updateHazards(float delta) {
+        for (int i = hazards.size() - 1; i >= 0; i--) {
+            HazardZone hazard = hazards.get(i);
+            hazard.update(delta);
+            if (hazard.isActive()) {
+                float dx = player.getCenterX() - hazard.x;
+                float dy = player.getCenterY() - hazard.y;
+                if ((dx * dx + dy * dy) <= hazard.radius * hazard.radius) {
+                    float damage = hazard.damagePerSecond * GameManager.getInstance().getDifficulty().getEnemyDamageMult();
+                    player.takeDamage(damage * delta, "Arena flame rune");
+                }
+            }
+            if (hazard.isDone()) {
+                hazards.remove(i);
+            }
+        }
+    }
+
+    private void updateEffects(float delta) {
+        for (int i = particles.size() - 1; i >= 0; i--) {
+            Particle particle = particles.get(i);
+            particle.update(delta);
+            if (particle.life <= 0f) {
+                particles.remove(i);
+            }
+        }
+        for (int i = floatingTexts.size() - 1; i >= 0; i--) {
+            FloatingText text = floatingTexts.get(i);
+            text.update(delta);
+            if (text.life <= 0f) {
+                floatingTexts.remove(i);
+            }
         }
     }
 
     @Override
     public void render(float delta) {
-        // Очищаем экран чёрным
-        ScreenUtils.clear(0, 0, 0, 1);
-        
-        // Рисуем фон арены (Фаза 9)
+        update(delta);
+
+        ScreenUtils.clear(0.02f, 0.025f, 0.035f, 1f);
+        applyWorldCamera();
+
+        batch.setProjectionMatrix(camera.combined);
+        shapeRenderer.setProjectionMatrix(camera.combined);
+
         batch.begin();
-        Texture bgTexture = 
-            com.gladiator.managers.AssetManager.getInstance().getTexture("backgrounds/arena.png");
-        if (bgTexture != null) {
-            batch.draw(bgTexture, 0, 0, 800, 480);
-        } else {
-            // Fallback: если фон не найден, рисуем тёмно-зелёный прямоугольник как раньше
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            shapeRenderer.setColor(0.1f, 0.3f, 0.1f, 1);
-            shapeRenderer.rect(0, 0, 800, 480);
-            shapeRenderer.end();
-        }
+        drawBackground();
         batch.end();
-        
-        // Обновляем Player
-        player.update(delta);
-        
-        // Фаза 8: обновляем Boss если волна 10
-        if (bossWave && boss != null && boss.alive) {
-            boss.update(delta, player.x + 24, player.y + 32);  // Центр игрока
-            
-            // Урон игроку от Босса
-            if (boss.bounds.overlaps(player.bounds)) {
-                player.takeDamage(boss.getContactDamage() * delta);
-            }
-            
-            // Урон Боссу от атаки игрока
-            if (player.isAttacking()) {
-                float centerPlayerX = player.x + 24;
-                float centerPlayerY = player.y + 32;
-                float centerEnemyX = boss.x + 40;
-                float centerEnemyY = boss.y + 40;
-                
-                float dist = (float) Math.sqrt(
-                    (centerPlayerX - centerEnemyX) * (centerPlayerX - centerEnemyX) +
-                    (centerPlayerY - centerEnemyY) * (centerPlayerY - centerEnemyY)
-                );
-                
-                if (dist <= 80f && boss.alive) {  // ATTACK_RADIUS = 80
-                    boss.takeDamage(player.getStats().getDamage());
-                    System.out.println("Hit BOSS! HP: " + boss.hp);
-                }
-            }
-        } else if (!enemiesListModified) {
-            // Обновляем обычных врагов - создаём копию листа для безопасного итерирования
-            List<Enemy> enemiesCopy = new ArrayList<>(enemies);
-            for (Enemy e : enemiesCopy) {
-                if (!e.isAlive()) continue;  // Пропускаем мёртвых в копии
-                
-                e.update(delta, player.x + 24, player.y + 32);  // Центр игрока
-                
-                // Урон игроку при контакте
-                if (e.bounds.overlaps(player.bounds) && e.isAlive()) {
-                    player.takeDamage(e.damage * delta);
-                }
-                
-                // Урон врагу от атаки игрока
-                if (player.isAttacking()) {
-                    float centerPlayerX = player.x + 24;
-                    float centerPlayerY = player.y + 32;
-                    float centerEnemyX = e.x + 20;
-                    float centerEnemyY = e.y + 20;
-                    
-                    float dist = (float) Math.sqrt(
-                        (centerPlayerX - centerEnemyX) * (centerPlayerX - centerEnemyX) +
-                        (centerPlayerY - centerEnemyY) * (centerPlayerY - centerEnemyY)
-                    );
-                    
-                    if (dist <= 80f && e.isAlive()) {  // ATTACK_RADIUS = 80
-                        e.takeDamage(player.getStats().getDamage());  // Фаза 7: используем stats.getDamage()
-                        System.out.println("Hit enemy! Enemy HP: " + e.hp);
-                    }
-                }
-                
-                // PHASE 11: Событие ENEMY_DIED уже публикуется в Enemy.takeDamage()
-                // Не публикуем дублированное событие здесь
-            }
-            
-            // Удаляем мёртвых врагов ПОСЛЕ итерирования
-            if (enemies.removeIf(e -> !e.isAlive())) {
-                enemiesListModified = true;
-            }
-            
-            // Отмечаем что волна очищена если все враги мертвы
-            if (enemies.isEmpty() && !waveCleared) {
-                waveCleared = true;
-            }
-            
-            // Сбрасываем флаг модификации для следующего кадра
-            enemiesListModified = false;
-        }
-        
-        // Рисуем врагов (если не волна босса)
-        if (!bossWave) {
-            batch.begin();
-            for (Enemy e : enemies) {
-                if (e.isAlive()) {
-                    e.render(batch);
-                }
-            }
-            batch.end();
-        }
-        
-        // Фаза 8: рисуем Босса если волна 10
-        if (bossWave && boss != null && boss.alive) {
-            batch.begin();
-            boss.renderBoss(batch, shapeRenderer);
-            batch.end();
-        }
-        
-        // Рисуем Player
+
+        drawWorldShapes();
+
         batch.begin();
+        if (bossWave && boss != null && boss.isAlive()) {
+            boss.render(batch);
+        } else {
+            for (int i = 0; i < enemies.size(); i++) {
+                enemies.get(i).render(batch);
+            }
+        }
+        for (int i = 0; i < projectiles.size(); i++) {
+            projectiles.get(i).render(batch);
+        }
         player.render(batch);
         batch.end();
-        
-        // Рисуем HUD (Фаза 8: обновлены для волны 10)
+
+        drawForegroundEffects();
+
+        resetHudCamera();
+        drawHudBars();
+
         batch.begin();
-        int maxHp = player.getStats().getMaxHp();
-        int damage = player.getStats().getDamage();
-        float speed = player.getStats().getSpeed();
-        float cooldown = player.getStats().getAttackCooldown();
-        
-        String hudText;
-        if (bossWave && boss != null) {
-            hudText = "HP: " + (int)player.hp + "/" + maxHp + 
-                     "  |  WAVE 10 — BOSS FIGHT!  |  Score: " + GameManager.getInstance().getScore();
-        } else {
-            hudText = "HP: " + (int)player.hp + "/" + maxHp + 
-                     "  |  Wave: " + GameManager.getInstance().getCurrentWave() + "/10" +
-                     "  |  Score: " + GameManager.getInstance().getScore() +
-                     "  |  [" + GameManager.getInstance().getDifficulty().getName() + "]";
-        }
-        font.draw(batch, hudText, 10, 470);
-        
-        // Вторая строка HUD с дополнительными характеристиками (Фаза 7)
-        String statsText = "DMG: " + damage + "  |  SPD: " + (int)speed + "  |  CD: " + String.format("%.2f", cooldown);
-        font.draw(batch, statsText, 10, 450);
+        drawHudText();
+        drawFloatingTexts();
         batch.end();
-        
-        // Фаза 8: нарисуй большой HP бар Босса внизу экрана
-        if (bossWave && boss != null && boss.alive) {
-            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-            
-            // Фон HP бара (серый): x=200, y=10, width=400, height=16
-            shapeRenderer.setColor(Color.DARK_GRAY);
-            shapeRenderer.rect(200, 10, 400, 16);
-            
-            // Полоска HP (красная): ширина = 400 * (boss.hp/boss.maxHp)
-            shapeRenderer.setColor(Color.SCARLET);
-            shapeRenderer.rect(200, 10, 400 * (boss.hp / boss.maxHp), 16);
-            
-            shapeRenderer.end();
-            
-            // Рисуй надпись над HP баром
-            batch.begin();
-            font.setColor(Color.RED);
-            font.getData().setScale(1.0f);
-            font.draw(batch, "DEMON KING  " + (int)boss.hp + " / " + (int)boss.maxHp + " HP", 250, 30);
-            font.setColor(Color.WHITE);
-            batch.end();
-        }
-        
-        // Проверяем завершение волны (все враги мертвы или босс мёртв) - ПОСЛЕ всех batch.end()
-        // Отложенная обработка - флаг устанавливается в update, обрабатывается здесь после render завершён
-        
-        // Фаза 8: проверяем смерть Босса для волны 10
-        if (bossWave && boss != null && !boss.alive && !waveCleared) {
-            waveCleared = true;
-            System.out.println("Boss is dead! Wave 10 will be marked as cleared!");
-        }
-        
-        if (waveCleared) {
-            waveCleared = false;
-            // Полностью очищаем врагов перед сменой экрана
-            enemies.clear();
-            EventBus.getInstance().post(new GameEvent(GameEvent.Type.WAVE_CLEARED));
-        }
-        
-        // Обработка клавиш
+
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             gsm.set(GameStateManager.State.GAME_OVER);
         }
+    }
+
+    private void drawBackground() {
+        Texture bg = AssetManager.getInstance().getTexture(AssetManager.TEX_BACKGROUND);
+        Texture pixel = AssetManager.getInstance().getPixel();
+        if (bg != null) {
+            batch.draw(bg, 0f, 0f, WORLD_WIDTH, WORLD_HEIGHT);
+        } else if (pixel != null) {
+            batch.setColor(0.13f, 0.14f, 0.16f, 1f);
+            batch.draw(pixel, 0f, 0f, WORLD_WIDTH, WORLD_HEIGHT);
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
+
+        if (pixel != null) {
+            batch.setColor(0.01f, 0.01f, 0.015f, 0.38f);
+            batch.draw(pixel, 0f, 0f, WORLD_WIDTH, 52f);
+            batch.draw(pixel, 0f, WORLD_HEIGHT - 58f, WORLD_WIDTH, 58f);
+            batch.draw(pixel, 0f, 0f, 44f, WORLD_HEIGHT);
+            batch.draw(pixel, WORLD_WIDTH - 44f, 0f, 44f, WORLD_HEIGHT);
+            if (bossWave) {
+                batch.setColor(0.45f, 0.04f, 0.08f, 0.18f);
+                batch.draw(pixel, 0f, 0f, WORLD_WIDTH, WORLD_HEIGHT);
+            }
+            batch.setColor(1f, 1f, 1f, 1f);
+        }
+    }
+
+    private void drawWorldShapes() {
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        for (int i = 0; i < hazards.size(); i++) {
+            HazardZone hazard = hazards.get(i);
+            float alpha = hazard.isActive() ? 0.34f : 0.16f + MathUtils.sin(hazard.age * 18f) * 0.07f;
+            shapeRenderer.setColor(1f, 0.24f, 0.08f, alpha);
+            shapeRenderer.circle(hazard.x, hazard.y, hazard.radius);
+            shapeRenderer.setColor(1f, 0.7f, 0.1f, alpha * 0.45f);
+            shapeRenderer.circle(hazard.x, hazard.y, hazard.radius * 0.58f);
+        }
+        if (attackArcTimer > 0f) {
+            float alpha = attackArcTimer / 0.18f;
+            shapeRenderer.setColor(1f, 0.82f, 0.25f, alpha * 0.18f);
+            shapeRenderer.circle(player.getCenterX(), player.getCenterY(), Player.ATTACK_RADIUS);
+            shapeRenderer.setColor(1f, 0.35f, 0.12f, alpha * 0.12f);
+            shapeRenderer.circle(player.getCenterX(), player.getCenterY(), Player.ATTACK_RADIUS * 0.72f);
+        }
+        shapeRenderer.end();
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
+        shapeRenderer.setColor(0.95f, 0.65f, 0.25f, 0.16f);
+        shapeRenderer.circle(WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f, 82f);
+        shapeRenderer.circle(WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f, 168f);
+        for (int i = 0; i < hazards.size(); i++) {
+            HazardZone hazard = hazards.get(i);
+            shapeRenderer.setColor(1f, 0.9f, 0.4f, hazard.isActive() ? 0.55f : 0.3f);
+            shapeRenderer.circle(hazard.x, hazard.y, hazard.radius);
+        }
+        shapeRenderer.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void drawForegroundEffects() {
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        for (int i = 0; i < particles.size(); i++) {
+            particles.get(i).render(shapeRenderer);
+        }
+        shapeRenderer.end();
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+    }
+
+    private void drawHudBars() {
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        float hpRatio = MathUtils.clamp(player.getHp() / player.getStats().getMaxHp(), 0f, 1f);
+        float cooldown = player.getAttackCooldownProgress();
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(0.05f, 0.045f, 0.04f, 0.88f);
+        shapeRenderer.rect(8f, 438f, 304f, 34f);
+        shapeRenderer.setColor(0.16f, 0.12f, 0.09f, 1f);
+        shapeRenderer.rect(18f, 454f, 218f, 12f);
+        shapeRenderer.setColor(0.95f * (1f - hpRatio), 0.2f + hpRatio * 0.65f, 0.12f, 1f);
+        shapeRenderer.rect(18f, 454f, 218f * hpRatio, 12f);
+        shapeRenderer.setColor(0.18f, 0.15f, 0.1f, 1f);
+        shapeRenderer.rect(18f, 442f, 218f, 6f);
+        shapeRenderer.setColor(1f, 0.75f, 0.22f, 1f);
+        shapeRenderer.rect(18f, 442f, 218f * cooldown, 6f);
+        shapeRenderer.end();
+
+        if (bossWave && boss != null && boss.isAlive()) {
+            float bossRatio = MathUtils.clamp(boss.getHp() / boss.getMaxHp(), 0f, 1f);
+            shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+            shapeRenderer.setColor(0.04f, 0.02f, 0.035f, 0.92f);
+            shapeRenderer.rect(150f, 18f, 500f, 22f);
+            shapeRenderer.setColor(0.42f, 0.03f, 0.08f, 1f);
+            shapeRenderer.rect(158f, 25f, 484f, 8f);
+            shapeRenderer.setColor(0.9f, 0.12f, 0.1f, 1f);
+            shapeRenderer.rect(158f, 25f, 484f * bossRatio, 8f);
+            shapeRenderer.end();
+        }
+    }
+
+    private void drawHudText() {
+        font.getData().setScale(1.0f);
+        font.setColor(Color.WHITE);
+        hudBuilder.setLength(0);
+        hudBuilder.append("HP ")
+            .append((int) player.getHp())
+            .append("/")
+            .append(player.getStats().getMaxHp())
+            .append("   WAVE ")
+            .append(GameManager.getInstance().getCurrentWave())
+            .append("/")
+            .append(WAVES.length)
+            .append("   SCORE ")
+            .append(GameManager.getInstance().getScore());
+        font.draw(batch, hudBuilder, 18f, 468f);
+
+        statsBuilder.setLength(0);
+        statsBuilder.append("DMG ")
+            .append(player.getStats().getDamage())
+            .append("   SPD ")
+            .append((int) player.getStats().getSpeed())
+            .append("   CD ")
+            .append(formatCooldown(player.getStats().getAttackCooldown()))
+            .append("   ")
+            .append(GameManager.getInstance().getDifficulty().getName());
+        font.draw(batch, statsBuilder, 330f, 468f);
+
+        WavePlan plan = getWavePlan(GameManager.getInstance().getCurrentWave());
+        if (!bossWave) {
+            statsBuilder.setLength(0);
+            statsBuilder.append(plan.name)
+                .append("   Remaining ")
+                .append(levelManager == null ? 0 : Math.max(0, levelManager.getEnemiesAlive()));
+            font.draw(batch, statsBuilder, 18f, 428f);
+        }
+
+        font.getData().setScale(0.85f);
+        font.setColor(0.78f, 0.78f, 0.72f, 1f);
+        font.draw(batch, "WASD move  |  Auto-slash when gold meter fills  |  ESC concede", 452f, 24f);
+
+        if (waveIntroTimer > 0f) {
+            float alpha = MathUtils.clamp(waveIntroTimer, 0f, 1f);
+            font.getData().setScale(bossWave ? 2.2f : 1.75f);
+            font.setColor(1f, bossWave ? 0.28f : 0.82f, bossWave ? 0.18f : 0.32f, alpha);
+            statsBuilder.setLength(0);
+            statsBuilder.append("WAVE ")
+                .append(GameManager.getInstance().getCurrentWave())
+                .append(": ")
+                .append(plan.name);
+            font.draw(batch, statsBuilder, bossWave ? 165f : 210f, 286f);
+        }
+
+        if (bossWave && boss != null && boss.isAlive()) {
+            font.getData().setScale(1.0f);
+            font.setColor(1f, 0.62f, 0.56f, 1f);
+            statsBuilder.setLength(0);
+            statsBuilder.append("DEMON KING  ")
+                .append((int) boss.getHp())
+                .append("/")
+                .append((int) boss.getMaxHp());
+            font.draw(batch, statsBuilder, 316f, 38f);
+        }
+        font.setColor(Color.WHITE);
+        font.getData().setScale(1f);
+    }
+
+    private String formatCooldown(float cooldown) {
+        int cdInt = (int) (cooldown * 100f + 0.5f);
+        int cdWhole = cdInt / 100;
+        int cdFrac = cdInt % 100;
+        if (cdFrac < 10) {
+            return cdWhole + ".0" + cdFrac;
+        }
+        return cdWhole + "." + cdFrac;
+    }
+
+    private void drawFloatingTexts() {
+        font.getData().setScale(0.9f);
+        for (int i = 0; i < floatingTexts.size(); i++) {
+            floatingTexts.get(i).render(batch, font);
+        }
+        font.setColor(Color.WHITE);
+        font.getData().setScale(1f);
+    }
+
+    private void applyWorldCamera() {
+        float shakeX = 0f;
+        float shakeY = 0f;
+        if (shakeTimer > 0f) {
+            float falloff = shakeTimer;
+            shakeX = MathUtils.random(-shakePower, shakePower) * falloff;
+            shakeY = MathUtils.random(-shakePower, shakePower) * falloff;
+        }
+        camera.position.set(WORLD_WIDTH / 2f + shakeX, WORLD_HEIGHT / 2f + shakeY, 0f);
+        camera.update();
+    }
+
+    private void resetHudCamera() {
+        camera.position.set(WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f, 0f);
+        camera.update();
+        batch.setProjectionMatrix(camera.combined);
+        shapeRenderer.setProjectionMatrix(camera.combined);
+    }
+
+    private void spawnHazard(float x, float y, float radius, float damagePerSecond) {
+        hazards.add(new HazardZone(x, y, radius, damagePerSecond));
+        spawnBurst(x, y, 10, 1f, 0.38f, 0.08f);
+    }
+
+    private void spawnBurst(float x, float y, int count, float r, float g, float b) {
+        for (int i = 0; i < count; i++) {
+            float angle = MathUtils.random(0f, MathUtils.PI2);
+            float speed = MathUtils.random(35f, 150f);
+            float size = MathUtils.random(2.2f, 5.2f);
+            particles.add(new Particle(x, y, MathUtils.cos(angle) * speed,
+                MathUtils.sin(angle) * speed, MathUtils.random(0.28f, 0.72f), size, r, g, b));
+        }
+    }
+
+    private void spawnSlash(float x, float y) {
+        for (int i = 0; i < 18; i++) {
+            float angle = MathUtils.random(0f, MathUtils.PI2);
+            float speed = MathUtils.random(110f, 245f);
+            particles.add(new Particle(x, y, MathUtils.cos(angle) * speed,
+                MathUtils.sin(angle) * speed, 0.23f, MathUtils.random(1.5f, 3.5f), 1f, 0.78f, 0.24f));
+        }
+    }
+
+    private void addFloatingText(String text, float x, float y, float r, float g, float b) {
+        floatingTexts.add(new FloatingText(text, x, y, r, g, b));
+    }
+
+    private void shake(float duration, float power) {
+        shakeTimer = Math.max(shakeTimer, duration);
+        shakePower = Math.max(shakePower, power);
     }
 
     @Override
@@ -504,37 +761,155 @@ public class GameScreen implements Screen {
 
     @Override
     public void resume() {
-        // Пересоздаём batch в случае если он был disposed при hide()
-        batch = new SpriteBatch();
-        font = new BitmapFont();
-        font.setColor(Color.WHITE);
-        shapeRenderer = new ShapeRenderer();
-        
-        // Спавним следующую волну после UpgradeScreen (Фаза 7-8)
-        spawnWave(GameManager.getInstance().getCurrentWave());
     }
 
     @Override
     public void hide() {
-        // Очищаем все подписчики перед переходом на другой экран
-        EventBus.getInstance().clear();
-        // Закончим любые открытые batches
-        if (batch != null && batch.isDrawing()) {
-            batch.end();
+        EventBus.getInstance().unsubscribe(GameEvent.Type.WAVE_CLEARED, waveClearedListener);
+        EventBus.getInstance().unsubscribe(GameEvent.Type.PLAYER_DIED, playerDiedListener);
+        EventBus.getInstance().unsubscribe(GameEvent.Type.BOSS_DIED, bossDiedListener);
+        EventBus.getInstance().unsubscribe(GameEvent.Type.ENEMY_DIED, enemyDiedListener);
+        if (levelManager != null) {
+            levelManager.dispose();
+            levelManager = null;
         }
-        // Не удаляем ресурсы - пусть dispose() сделает это при полном завершении
     }
 
     @Override
     public void dispose() {
-        if (batch != null) {
-            batch.dispose();
+        hide();
+        batch.dispose();
+        shapeRenderer.dispose();
+        font.dispose();
+    }
+
+    private static final class WavePlan {
+        private final String name;
+        private final int slimes;
+        private final int goblins;
+        private final int archers;
+        private final int brutes;
+        private final float spawnInterval;
+        private final boolean hazards;
+        private final boolean bossWave;
+
+        private WavePlan(String name, int slimes, int goblins, int archers, int brutes,
+                float spawnInterval, boolean hazards, boolean bossWave) {
+            this.name = name;
+            this.slimes = slimes;
+            this.goblins = goblins;
+            this.archers = archers;
+            this.brutes = brutes;
+            this.spawnInterval = spawnInterval;
+            this.hazards = hazards;
+            this.bossWave = bossWave;
         }
-        if (font != null) {
-            font.dispose();
+
+        private int totalEnemies() {
+            return slimes + goblins + archers + brutes;
         }
-        if (shapeRenderer != null) {
-            shapeRenderer.dispose();
+    }
+
+    private static final class Particle {
+        private float x;
+        private float y;
+        private float vx;
+        private float vy;
+        private final float maxLife;
+        private final float size;
+        private final float r;
+        private final float g;
+        private final float b;
+        private float life;
+
+        private Particle(float x, float y, float vx, float vy, float life,
+                float size, float r, float g, float b) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.life = life;
+            this.maxLife = life;
+            this.size = size;
+            this.r = r;
+            this.g = g;
+            this.b = b;
+        }
+
+        private void update(float delta) {
+            life -= delta;
+            x += vx * delta;
+            y += vy * delta;
+            vx *= 0.94f;
+            vy *= 0.94f;
+        }
+
+        private void render(ShapeRenderer renderer) {
+            float alpha = MathUtils.clamp(life / maxLife, 0f, 1f);
+            renderer.setColor(r, g, b, alpha);
+            renderer.circle(x, y, size * alpha + 0.8f);
+        }
+    }
+
+    private static final class FloatingText {
+        private final String text;
+        private final float r;
+        private final float g;
+        private final float b;
+        private float x;
+        private float y;
+        private float life;
+
+        private FloatingText(String text, float x, float y, float r, float g, float b) {
+            this.text = text;
+            this.x = x;
+            this.y = y;
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.life = 0.85f;
+        }
+
+        private void update(float delta) {
+            life -= delta;
+            y += 28f * delta;
+        }
+
+        private void render(SpriteBatch batch, BitmapFont font) {
+            float alpha = MathUtils.clamp(life / 0.85f, 0f, 1f);
+            font.setColor(r, g, b, alpha);
+            font.draw(batch, text, x - 12f, y);
+        }
+    }
+
+    private static final class HazardZone {
+        private static final float TELEGRAPH_SECONDS = 1.05f;
+        private static final float ACTIVE_SECONDS = 1.55f;
+
+        private final float x;
+        private final float y;
+        private final float radius;
+        private final float damagePerSecond;
+        private float age;
+
+        private HazardZone(float x, float y, float radius, float damagePerSecond) {
+            this.x = x;
+            this.y = y;
+            this.radius = radius;
+            this.damagePerSecond = damagePerSecond;
+            this.age = 0f;
+        }
+
+        private void update(float delta) {
+            age += delta;
+        }
+
+        private boolean isActive() {
+            return age >= TELEGRAPH_SECONDS;
+        }
+
+        private boolean isDone() {
+            return age >= TELEGRAPH_SECONDS + ACTIVE_SECONDS;
         }
     }
 }

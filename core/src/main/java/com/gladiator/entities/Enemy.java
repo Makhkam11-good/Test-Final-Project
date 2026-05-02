@@ -1,177 +1,289 @@
 package com.gladiator.entities;
 
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.g2d.Animation;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Rectangle;
+import com.gladiator.ai.EnemyAI;
 import com.gladiator.events.EventBus;
 import com.gladiator.events.GameEvent;
 import com.gladiator.managers.AssetManager;
+import com.gladiator.managers.GameManager;
 
-/**
- * Enemy - базовый класс врага (Слизь, Гоблин).
- * Враги движутся к игроку и наносят урон при контакте.
- * Фаза 5: реализация с движением и коллизией.
- * Фаза 9: анимация спрайтов
- */
-public class Enemy {
-    // Размеры
-    public static final float WIDTH = 40f;
-    public static final float HEIGHT = 40f;
-    
-    // Позиция и движение
-    public float x, y;
-    public float speed;
-    
-    // Здоровье
-    public float hp, maxHp;
-    public float damage;  // урон в секунду
-    
-    // Состояние и награда
-    public boolean alive;
-    public int scoreReward;
-    
-    // Хитбокс
-    public Rectangle bounds;
-    
-    // Поля для анимации (Фаза 9)
-    public String animKey = "slime_walk";  // Ключ анимации, устанавливается фабриками
-    private float stateTime = 0f;
-    
-    // Ресурс для рисования красного пикселя (fallback если спрайт не найден)
-    private static com.badlogic.gdx.graphics.Texture redPixel;
-    
-    public Enemy() {
-        this.bounds = new Rectangle(x, y, WIDTH, HEIGHT);
+public class Enemy implements Renderable, Updatable {
+    private float x;
+    private float y;
+    private float width;
+    private float height;
+    private float speed;
+    private float hp;
+    private float maxHp;
+    private float damage;
+    private boolean alive;
+    private int scoreReward;
+    private String typeName;
+
+    private float targetX;
+    private float targetY;
+    private float moveDirX;
+    private float moveDirY;
+
+    private final Rectangle bounds;
+    private Texture texture;
+    private String animationKey;
+    private float colorR;
+    private float colorG;
+    private float colorB;
+    private float stateTime;
+    private float damageFlashTimer;
+    private float spawnAge;
+
+    private EnemyAI ai;
+    private EnemyAI patrolAi;
+    private EnemyAI aggressiveAi;
+    private float aggroRange;
+
+    private boolean ranged;
+    private float rangedCooldown;
+    private float rangedTimer;
+    private float projectileDamage;
+    private float projectileSpeed;
+    private float projectileRange;
+
+    public Enemy(float x, float y, float width, float height) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.bounds = new Rectangle(x, y, width, height);
         this.alive = true;
-        
-        // Создаём красный пиксель для рисования, если его нет
-        if (redPixel == null) {
-            createRedPixel();
-        }
+        this.colorR = 1f;
+        this.colorG = 1f;
+        this.colorB = 1f;
+        this.stateTime = 0f;
+        this.damageFlashTimer = 0f;
+        this.spawnAge = 0f;
+        this.ranged = false;
     }
-    
-    private static void createRedPixel() {
-        com.badlogic.gdx.graphics.Pixmap pixmap = 
-            new com.badlogic.gdx.graphics.Pixmap(1, 1, 
-                com.badlogic.gdx.graphics.Pixmap.Format.RGBA8888);
-        pixmap.setColor(1, 0, 0, 1);  // Красный
-        pixmap.fill();
-        redPixel = new com.badlogic.gdx.graphics.Texture(pixmap);
-        pixmap.dispose();
-    }
-    
-    /**
-     * Обновляет позицию врага, направляя его к игроку.
-     * PHASE 11: Враги не удаляются за экран, они остаются в игре пока не убиты.
-     */
-    public void update(float delta, float playerX, float playerY) {
+
+    @Override
+    public void update(float delta) {
         if (!alive) {
             return;
         }
-        
-        // Обновляем время для анимации
+
         stateTime += delta;
-        
-        // Вычисляем вектор к игроку
-        float dx = playerX - x;
-        float dy = playerY - y;
-        
-        // Нормализуем вектор
-        float len = (float) Math.sqrt(dx * dx + dy * dy);
-        if (len > 0) {
-            dx /= len;
-            dy /= len;
+        spawnAge += delta;
+        damageFlashTimer = Math.max(0f, damageFlashTimer - delta);
+        if (rangedTimer > 0f) {
+            rangedTimer -= delta;
         }
-        
-        // Перемещаем врага
-        x += dx * speed * delta;
-        y += dy * speed * delta;
-        
-        // Обновляем bounds
-        bounds.set(x, y, WIDTH, HEIGHT);
-        
-        // PHASE 11: Враг НЕ удаляется если ушел за экран
-        // Враг остается в игре пока не убит вручную игроком
+
+        if (patrolAi != null && aggressiveAi != null) {
+            float dx = targetX - x;
+            float dy = targetY - y;
+            if ((dx * dx + dy * dy) <= (aggroRange * aggroRange)) {
+                ai = aggressiveAi;
+            }
+        }
+
+        if (ai != null) {
+            ai.update(this, delta, targetX, targetY);
+        }
+
+        x += moveDirX * speed * delta;
+        y += moveDirY * speed * delta;
+
+        x = MathUtils.clamp(x, 0f, 800f - width);
+        y = MathUtils.clamp(y, 0f, 480f - height);
+        bounds.set(x, y, width, height);
     }
-    
-    /**
-     * Рисует врага с анимацией спрайтов (Фаза 9).
-     * Fallback: если спрайт не найден, рисует красный квадрат как раньше.
-     */
+
+    @Override
     public void render(SpriteBatch batch) {
         if (!alive) {
             return;
         }
-        
-        // Получаем анимацию по ключу
-        Animation<TextureRegion> animation = AssetManager.getInstance().getAnimation(animKey);
-        
-        if (animation != null) {
-            // Получаем текущий кадр анимации
-            TextureRegion frame = animation.getKeyFrame(stateTime, true);
-            
-            // Проверяем что кадр не null
-            if (frame != null) {
-                // Флипируем если враг движется влево
-                // (можно определить по velocityX если надо, но пока используем простую логику)
-                
-                // Рисуем спрайт с стандартным размером врага
-                batch.draw(frame, x, y, WIDTH, HEIGHT);
-            } else {
-                // Fallback если кадр null - рисуем красный квадрат
-                if (redPixel != null) {
-                    batch.setColor(Color.RED);
-                    batch.draw(redPixel, x, y, WIDTH, HEIGHT);
-                    batch.setColor(Color.WHITE);
-                }
-            }
+
+        Texture pixel = AssetManager.getInstance().getPixel();
+        TextureRegion frame = animationKey == null
+            ? null
+            : AssetManager.getInstance().getAnimationFrame(animationKey, stateTime, 0.12f);
+        float bob = MathUtils.sin(stateTime * 8f) * 1.1f;
+        float spawnScale = MathUtils.clamp(spawnAge / 0.25f, 0.1f, 1f);
+        if (damageFlashTimer > 0f) {
+            batch.setColor(1f, 0.35f, 0.25f, 1f);
         } else {
-            // Fallback: если спрайт не найден, рисуем красный квадрат как раньше
-            if (redPixel != null) {
-                batch.setColor(Color.RED);
-                batch.draw(redPixel, x, y, WIDTH, HEIGHT);
-                batch.setColor(Color.WHITE);
-            }
+            batch.setColor(colorR, colorG, colorB, 1f);
         }
+        if (frame != null) {
+            batch.draw(frame, x + width * (1f - spawnScale) / 2f, y + bob,
+                width / 2f, height / 2f, width, height, spawnScale, spawnScale, 0f);
+        } else if (texture != null) {
+            batch.draw(texture, x, y, width, height);
+        } else if (pixel != null) {
+            batch.draw(pixel, x, y, width, height);
+        }
+        batch.setColor(1f, 1f, 1f, 1f);
     }
-    
-    /**
-     * Получает урон.
-     * PHASE 11: Добавление очков при смерти врага
-     */
+
     public void takeDamage(float amount) {
+        if (!alive) {
+            return;
+        }
         hp -= amount;
-        
-        if (hp <= 0 && alive) {
+        damageFlashTimer = 0.14f;
+        EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_HURT, this));
+        if (hp <= 0f) {
             alive = false;
-            System.out.println("Enemy died! Score: " + scoreReward);
-            
-            // Добавляем очки когда враг умирает
-            com.gladiator.managers.GameManager.getInstance().addScore(scoreReward);
-            
-            // Публикуем событие смерти врага
-            EventBus.getInstance().post(
-                new GameEvent(GameEvent.Type.ENEMY_DIED, this)
-            );
+            GameManager.getInstance().addScore(scoreReward);
+            GameManager.getInstance().addEnemyKill();
+            EventBus.getInstance().post(new GameEvent(GameEvent.Type.ENEMY_DIED, this));
         }
     }
-    
-    /**
-     * Проверяет жив ли враг.
-     */
+
     public boolean isAlive() {
         return alive;
     }
-    
-    /**
-     * Очищает ресурсы.
-     */
-    public static void dispose() {
-        if (redPixel != null) {
-            redPixel.dispose();
-            redPixel = null;
+
+    public Rectangle getBounds() {
+        return bounds;
+    }
+
+    public float getDamage() {
+        return damage;
+    }
+
+    public float getSpeed() {
+        return speed;
+    }
+
+    public String getTypeName() {
+        return typeName;
+    }
+
+    public float getX() {
+        return x;
+    }
+
+    public float getY() {
+        return y;
+    }
+
+    public float getCenterX() {
+        return x + width / 2f;
+    }
+
+    public float getCenterY() {
+        return y + height / 2f;
+    }
+
+    public float getWidth() {
+        return width;
+    }
+
+    public float getHeight() {
+        return height;
+    }
+
+    public float getHp() {
+        return hp;
+    }
+
+    public float getMaxHp() {
+        return maxHp;
+    }
+
+    public void setPosition(float x, float y) {
+        this.x = x;
+        this.y = y;
+        bounds.set(x, y, width, height);
+    }
+
+    public void setTarget(float x, float y) {
+        targetX = x;
+        targetY = y;
+    }
+
+    public void setMoveDirection(float x, float y) {
+        moveDirX = x;
+        moveDirY = y;
+    }
+
+    public void setStats(float hp, float damage, float speed) {
+        this.hp = hp;
+        this.maxHp = hp;
+        this.damage = damage;
+        this.speed = speed;
+    }
+
+    public void setSpeed(float speed) {
+        this.speed = speed;
+    }
+
+    public void setScoreReward(int scoreReward) {
+        this.scoreReward = scoreReward;
+    }
+
+    public void setTexture(Texture texture) {
+        this.texture = texture;
+    }
+
+    public void setAnimationKey(String animationKey) {
+        this.animationKey = animationKey;
+    }
+
+    public void setRenderColor(float r, float g, float b) {
+        colorR = r;
+        colorG = g;
+        colorB = b;
+    }
+
+    public void setTypeName(String typeName) {
+        this.typeName = typeName;
+    }
+
+    public void setAi(EnemyAI ai) {
+        this.ai = ai;
+        this.patrolAi = null;
+        this.aggressiveAi = null;
+    }
+
+    public void setPatrolAggroAi(EnemyAI patrolAi, EnemyAI aggressiveAi, float aggroRange) {
+        this.patrolAi = patrolAi;
+        this.aggressiveAi = aggressiveAi;
+        this.aggroRange = aggroRange;
+        this.ai = patrolAi;
+    }
+
+    public void configureRanged(float cooldown, float damage, float speed, float range) {
+        ranged = true;
+        rangedCooldown = cooldown;
+        rangedTimer = MathUtils.random(0.25f, cooldown);
+        projectileDamage = damage;
+        projectileSpeed = speed;
+        projectileRange = range;
+    }
+
+    public boolean consumeRangedAttackReady(float playerX, float playerY) {
+        if (!ranged || rangedTimer > 0f) {
+            return false;
         }
+        float dx = playerX - getCenterX();
+        float dy = playerY - getCenterY();
+        if ((dx * dx + dy * dy) > projectileRange * projectileRange) {
+            return false;
+        }
+        rangedTimer = rangedCooldown;
+        return true;
+    }
+
+    public float getProjectileDamage() {
+        return projectileDamage;
+    }
+
+    public float getProjectileSpeed() {
+        return projectileSpeed;
     }
 }

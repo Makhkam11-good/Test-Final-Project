@@ -1,12 +1,17 @@
 package com.gladiator.ai;
 
-/**
- * CowardlyAI - враг трусливый, попытается убежать от игрока.
- */
-public class CowardlyAI implements EnemyAI {
+import com.gladiator.entities.Enemy;
 
+public class CowardlyAI implements EnemyAI {
     @Override
-    public void update(float delta) {
-        // TODO: Реализовать в Фазе 5
+    public void update(Enemy enemy, float delta, float playerX, float playerY) {
+        float dx = enemy.getX() - playerX;
+        float dy = enemy.getY() - playerY;
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len == 0f) {
+            enemy.setMoveDirection(0f, 0f);
+            return;
+        }
+        enemy.setMoveDirection(dx / len, dy / len);
     }
 }

@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class EventBus {
     private static EventBus instance;
-    private Map<GameEvent.Type, List<EventListener>> listeners = new HashMap<>();
+    private final Map<GameEvent.Type, List<EventListener>> listeners = new HashMap<>();
 
     private EventBus() {
     }
@@ -40,16 +40,16 @@ public class EventBus {
     }
 
     /**
-     * Опубликовать событие всем подписчикам.
-     * Итерирует по КОПИИ списка для избежания ConcurrentModificationException.
+     * Publish a game event to all current listeners.
      */
     public void post(GameEvent event) {
         List<EventListener> list = listeners.get(event.getType());
-        if (list != null) {
-            // Итерируем по копии списка
-            for (EventListener listener : new ArrayList<>(list)) {
-                listener.onEvent(event);
-            }
+        if (list == null) {
+            return;
+        }
+        List<EventListener> snapshot = new ArrayList<>(list);
+        for (int i = 0; i < snapshot.size(); i++) {
+            snapshot.get(i).onEvent(event);
         }
     }
 

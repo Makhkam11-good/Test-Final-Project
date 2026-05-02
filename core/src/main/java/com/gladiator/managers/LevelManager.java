@@ -1,54 +1,40 @@
 package com.gladiator.managers;
 
+import com.badlogic.gdx.Gdx;
 import com.gladiator.events.EventBus;
+import com.gladiator.events.EventListener;
 import com.gladiator.events.GameEvent;
 
 /**
- * LevelManager - управляет волнами врагов и отслеживает их уничтожение.
- * Паттерн: Observer (слушает ENEMY_DIED события).
- * PHASE 11: Синхронизация с GameManager для правильного отсчета волн
+ * LevelManager tracks remaining enemies and posts WAVE_CLEARED.
  */
 public class LevelManager {
     private int enemiesAlive;
-    
+    private final EventListener enemyDiedListener;
+
     public LevelManager() {
-        this.enemiesAlive = 0;
-        
-        // Подписываемся на событие смерти врага
-        EventBus.getInstance().subscribe(
-            GameEvent.Type.ENEMY_DIED,
-            event -> onEnemyDied()
-        );
+        enemiesAlive = 0;
+        enemyDiedListener = event -> onEnemyDied();
+        EventBus.getInstance().subscribe(GameEvent.Type.ENEMY_DIED, enemyDiedListener);
     }
-    
-    /**
-     * Начать новую волну с указанным количеством врагов.
-     * PHASE 11: Используем GameManager для номера волны, не ведем свой счетчик
-     */
+
     public void startWave(int enemyCount) {
         enemiesAlive = enemyCount;
-        int currentWave = GameManager.getInstance().getCurrentWave();
-        System.out.println("Wave " + currentWave + " started, enemies: " + enemyCount);
+        Gdx.app.log("LevelManager", "Wave start: " + GameManager.getInstance().getCurrentWave());
     }
-    
-    /**
-     * Вызывается когда враг убит.
-     * Публикует WAVE_CLEARED если враги закончились.
-     */
+
     private void onEnemyDied() {
-        enemiesAlive--;
-        System.out.println("Enemies left: " + enemiesAlive);
-        
+        enemiesAlive -= 1;
         if (enemiesAlive <= 0) {
-            System.out.println("WAVE CLEARED!");
             EventBus.getInstance().post(new GameEvent(GameEvent.Type.WAVE_CLEARED));
         }
     }
-    
-    /**
-     * Получить количество живых врагов.
-     */
+
     public int getEnemiesAlive() {
         return enemiesAlive;
+    }
+
+    public void dispose() {
+        EventBus.getInstance().unsubscribe(GameEvent.Type.ENEMY_DIED, enemyDiedListener);
     }
 }

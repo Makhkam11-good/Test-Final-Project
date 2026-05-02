@@ -1,8 +1,5 @@
 package com.gladiator.decorator;
 
-/**
- * PoisonDecorator - апгрейд "Ядовитый удар" (+10 урона).
- */
 public class PoisonDecorator extends PlayerDecorator {
 
     public PoisonDecorator(PlayerStats wrapped) {
@@ -15,7 +12,7 @@ public class PoisonDecorator extends PlayerDecorator {
     }
 
     @Override
-    public String getDescription() {
-        return "Poison Blade: +10 damage";
+    public String getLabel() {
+        return "Poison (+10 DMG)";
     }
 }

@@ -4,8 +4,7 @@ import com.gladiator.strategy.DifficultyStrategy;
 import com.gladiator.strategy.MediumDifficulty;
 
 /**
- * GameManager (Singleton) - управляет игровой логикой: сложность, счёт, текущая волна.
- * Фаза 6: Strategy паттерн для управления сложностью.
+ * GameManager (Singleton) holds run state and difficulty strategy.
  */
 public class GameManager {
     private static GameManager instance;
@@ -13,11 +12,14 @@ public class GameManager {
     private DifficultyStrategy difficulty;
     private int score;
     private int currentWave;
+    private int enemiesKilled;
+    private int upgradesCollected;
+    private float timeSurvived;
+    private String lastDeathCause;
 
     private GameManager() {
-        this.difficulty = new MediumDifficulty();  // Medium по умолчанию
-        this.score = 0;
-        this.currentWave = 1;
+        this.difficulty = new MediumDifficulty();
+        resetRun();
     }
 
     public static GameManager getInstance() {
@@ -27,55 +29,69 @@ public class GameManager {
         return instance;
     }
 
-    /**
-     * Устанавливает стратегию сложности.
-     */
-    public void setDifficulty(DifficultyStrategy difficulty) {
+    public void startNewRun(DifficultyStrategy difficulty) {
         this.difficulty = difficulty;
+        resetRun();
     }
 
-    /**
-     * Получает текущую стратегию сложности.
-     */
+    public void resetRun() {
+        score = 0;
+        currentWave = 1;
+        enemiesKilled = 0;
+        upgradesCollected = 0;
+        timeSurvived = 0f;
+        lastDeathCause = "";
+    }
+
     public DifficultyStrategy getDifficulty() {
         return difficulty;
     }
 
-    /**
-     * Добавляет очки к текущему счёту.
-     */
     public void addScore(int points) {
-        this.score += points;
+        score += points;
     }
 
-    /**
-     * Получает текущий счёт.
-     */
     public int getScore() {
         return score;
     }
 
-    /**
-     * Получает текущую волну.
-     */
     public int getCurrentWave() {
         return currentWave;
     }
 
-    /**
-     * Устанавливает текущую волну.
-     */
     public void setCurrentWave(int wave) {
-        this.currentWave = wave;
+        currentWave = wave;
     }
 
-    /**
-     * Сбрасывает состояние для новой игры:
-     * score=0, currentWave=1, difficulty=MediumDifficulty.
-     */
-    public void reset() {
-        this.score = 0;
-        this.currentWave = 1;
-        this.difficulty = new MediumDifficulty();
+    public void addEnemyKill() {
+        enemiesKilled += 1;
+    }
+
+    public int getEnemiesKilled() {
+        return enemiesKilled;
+    }
+
+    public void addUpgrade() {
+        upgradesCollected += 1;
+    }
+
+    public int getUpgradesCollected() {
+        return upgradesCollected;
+    }
+
+    public void addTime(float delta) {
+        timeSurvived += delta;
+    }
+
+    public float getTimeSurvived() {
+        return timeSurvived;
+    }
+
+    public void setLastDeathCause(String cause) {
+        lastDeathCause = cause;
+    }
+
+    public String getLastDeathCause() {
+        return lastDeathCause;
     }
 }

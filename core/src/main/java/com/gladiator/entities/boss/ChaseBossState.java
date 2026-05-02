@@ -2,11 +2,8 @@ package com.gladiator.entities.boss;
 
 import com.gladiator.entities.Boss;
 
-/**
- * ChaseBossState - Босс медленно преследует игрока (80 px/sec, 3 сек), потом переходит в Dash.
- */
 public class ChaseBossState implements BossState {
-    
+
     private float timer = 0f;
     private static final float DURATION = 3.0f;
     private static final float SPEED = 80f;
@@ -14,7 +11,6 @@ public class ChaseBossState implements BossState {
     @Override
     public void enter(Boss boss) {
         timer = 0f;
-        System.out.println("Boss: CHASE");
     }
 
     @Override
@@ -22,8 +18,8 @@ public class ChaseBossState implements BossState {
         timer += delta;
         
         // Движение к игроку
-        float dx = playerX - boss.x;
-        float dy = playerY - boss.y;
+        float dx = playerX - boss.getX();
+        float dy = playerY - boss.getY();
         float len = (float) Math.sqrt(dx*dx + dy*dy);
         if (len > 0) {
             boss.lastDirX = dx/len;
@@ -33,7 +29,7 @@ public class ChaseBossState implements BossState {
         }
         
         if (timer >= DURATION) {
-            boss.changeState(new DashBossState());
+            boss.changeState(boss.getDashState());
         }
     }
 

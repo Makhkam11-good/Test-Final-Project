@@ -1,12 +1,17 @@
 package com.gladiator.ai;
 
-/**
- * AggressiveAI - враг агрессивно преследует игрока.
- */
-public class AggressiveAI implements EnemyAI {
+import com.gladiator.entities.Enemy;
 
+public class AggressiveAI implements EnemyAI {
     @Override
-    public void update(float delta) {
-        // TODO: Реализовать в Фазе 5
+    public void update(Enemy enemy, float delta, float playerX, float playerY) {
+        float dx = playerX - enemy.getX();
+        float dy = playerY - enemy.getY();
+        float len = (float) Math.sqrt(dx * dx + dy * dy);
+        if (len == 0f) {
+            enemy.setMoveDirection(0f, 0f);
+            return;
+        }
+        enemy.setMoveDirection(dx / len, dy / len);
     }
 }

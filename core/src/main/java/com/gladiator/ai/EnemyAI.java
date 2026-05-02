@@ -1,8 +1,7 @@
 package com.gladiator.ai;
 
-/**
- * EnemyAI - интерфейс для поведения врагов (Patrol, Aggressive и т.д.).
- */
+import com.gladiator.entities.Enemy;
+
 public interface EnemyAI {
-    void update(float delta);
+    void update(Enemy enemy, float delta, float playerX, float playerY);
 }

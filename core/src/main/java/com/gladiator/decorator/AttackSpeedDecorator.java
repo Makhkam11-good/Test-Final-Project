@@ -1,8 +1,5 @@
 package com.gladiator.decorator;
 
-/**
- * AttackSpeedDecorator - апгрейд "Ускоренная атака" (-20% кулдаун атаки).
- */
 public class AttackSpeedDecorator extends PlayerDecorator {
 
     public AttackSpeedDecorator(PlayerStats wrapped) {
@@ -15,7 +12,7 @@ public class AttackSpeedDecorator extends PlayerDecorator {
     }
 
     @Override
-    public String getDescription() {
-        return "Attack Speed: -20% cooldown";
+    public String getLabel() {
+        return "Attack Speed (-20% CD)";
     }
 }

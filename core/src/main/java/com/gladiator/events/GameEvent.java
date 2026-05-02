@@ -6,7 +6,15 @@ package com.gladiator.events;
 public class GameEvent {
 
     public enum Type {
-        ENEMY_DIED, WAVE_CLEARED, PLAYER_HURT, PLAYER_DIED, BOSS_DIED
+        ENEMY_DIED,
+        ENEMY_HURT,
+        PLAYER_ATTACK,
+        PLAYER_HURT,
+        PLAYER_DIED,
+        UPGRADE_SELECTED,
+        WAVE_STARTED,
+        WAVE_CLEARED,
+        BOSS_DIED
     }
 
     private final Type type;

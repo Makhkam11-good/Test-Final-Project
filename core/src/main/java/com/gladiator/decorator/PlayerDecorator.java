@@ -1,7 +1,7 @@
 package com.gladiator.decorator;
 
 /**
- * PlayerDecorator (Decorator паттерн) - абстрактный класс для апгрейдов Рыцаря.
+ * PlayerDecorator is the base for all upgrade decorators.
  */
 public abstract class PlayerDecorator implements PlayerStats {
     protected PlayerStats wrapped;
@@ -30,13 +30,5 @@ public abstract class PlayerDecorator implements PlayerStats {
         return wrapped.getAttackCooldown();
     }
 
-    @Override
-    public float getDamageReduction() {
-        return wrapped.getDamageReduction();
-    }
-
-    @Override
-    public String getDescription() {
-        return wrapped.getDescription();
-    }
+    public abstract String getLabel();
 }

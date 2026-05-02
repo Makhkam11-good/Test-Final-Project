@@ -1,17 +1,21 @@
 package com.gladiator.commands;
 
-/**
- * AttackCommand - команда для атаки Рыцаря.
- */
+import com.gladiator.entities.Player;
+
 public class AttackCommand implements Command {
+    private final Player player;
+
+    public AttackCommand(Player player) {
+        this.player = player;
+    }
 
     @Override
     public void execute() {
-        // TODO: Реализовать в Фазе 7
+        player.performAttack();
     }
 
     @Override
     public void undo() {
-        // TODO: Реализовать в Фазе 7
+        // No-op: attacks are not reversible in this game.
     }
 }

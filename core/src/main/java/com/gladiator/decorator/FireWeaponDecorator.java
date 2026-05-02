@@ -1,8 +1,5 @@
 package com.gladiator.decorator;
 
-/**
- * FireWeaponDecorator - апгрейд "Огненный меч" (+15 урона).
- */
 public class FireWeaponDecorator extends PlayerDecorator {
 
     public FireWeaponDecorator(PlayerStats wrapped) {
@@ -15,7 +12,7 @@ public class FireWeaponDecorator extends PlayerDecorator {
     }
 
     @Override
-    public String getDescription() {
-        return "Fire Weapon: +15 damage";
+    public String getLabel() {
+        return "Fire Weapon (+15 DMG)";
     }
 }

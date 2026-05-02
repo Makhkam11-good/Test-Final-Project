@@ -1,8 +1,5 @@
 package com.gladiator.decorator;
 
-/**
- * SpeedBootsDecorator - апгрейд "Сапоги скорости" (+25% скорость).
- */
 public class SpeedBootsDecorator extends PlayerDecorator {
 
     public SpeedBootsDecorator(PlayerStats wrapped) {
@@ -15,7 +12,7 @@ public class SpeedBootsDecorator extends PlayerDecorator {
     }
 
     @Override
-    public String getDescription() {
-        return "Speed Boots: +25% speed";
+    public String getLabel() {
+        return "Speed Boots (+25% SPD)";
     }
 }

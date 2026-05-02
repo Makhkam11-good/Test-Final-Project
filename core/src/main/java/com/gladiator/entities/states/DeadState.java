@@ -2,9 +2,6 @@ package com.gladiator.entities.states;
 
 import com.gladiator.entities.Player;
 
-/**
- * DeadState - Рыцарь мертв (HP <= 0).
- */
 public class DeadState implements PlayerState {
     private Player player;
 
@@ -14,7 +11,6 @@ public class DeadState implements PlayerState {
 
     @Override
     public void enter() {
-        System.out.println("Player: Dead");
     }
 
     @Override
